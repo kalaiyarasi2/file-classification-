@@ -1,0 +1,10 @@
+{
+  "input_folder": "./input",
+  "output_folder": "./output",
+  "ocr_enabled": true,
+  "llm_enabled": true,
+  "copy_mode": false,
+  "log_level": "INFO",
+
+  "_comment": "Categories and keywords are now loaded from the .env file (CATEGORY_* keys). The 'categories' block below is only used as a fallback if .env has no CATEGORY_ entries."
+}

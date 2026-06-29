@@ -1,0 +1,13 @@
+.env
+client_secret_979255335659-4utki4kbslgrh677gtoqqss9rp31nhou.apps.googleusercontent.com.json
+client_secret.json
+venv/
+__pycache__/*
+*.pyc
+logs/*
+output/*
+.sessions/* 
+.cache  
+.pytest_cache/*
+input/*
+scratch/*

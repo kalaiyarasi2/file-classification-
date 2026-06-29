@@ -1,0 +1,57 @@
+# ── Core ──────────────────────────────────────────────────────────────────
+# (pathlib, shutil, logging, argparse, csv, json are stdlib — no pip needed)
+
+# ── PDF extraction ─────────────────────────────────────────────────────────
+pdfplumber>=0.10.3
+PyMuPDF>=1.23.0          # provides `fitz`; used as PDF fallback + OCR rasteriser
+pdf2image>=1.17.0        # converts PDF pages to images at high DPI (requires Poppler)
+pypdf>=4.0.0             # layout-preserving PDF rotation (used by auto_rotation_ocr)
+
+# ── Office documents ───────────────────────────────────────────────────────
+python-docx>=1.1.0
+openpyxl>=3.1.2
+
+# ── OCR ───────────────────────────────────────────────────────────────────
+Pillow>=10.0.0
+pytesseract>=0.3.10
+rostaing-ocr
+# NOTE: Tesseract binary must be installed separately:
+#   macOS  → brew install tesseract
+#   Ubuntu → sudo apt-get install tesseract-ocr
+#   Windows → https://github.com/UB-Mannheim/tesseract/wiki
+
+# ── Auto-rotation pipeline (auto_rotation_ocr.py) ──────────────────────────
+opencv-python>=4.9.0     # fine skew detection via contour analysis
+numpy>=1.26.0            # required by opencv-python
+# NOTE: Poppler binary must be installed separately (used by pdf2image):
+#   Windows → https://github.com/oschwartz10612/poppler-windows/releases
+#   Set POPPLER_PATH in .env to the Poppler bin folder if not on PATH
+
+# ── Fuzzy matching ─────────────────────────────────────────────────────────
+rapidfuzz>=3.6.1
+
+# ── Data & reporting ───────────────────────────────────────────────────────
+pandas>=2.2.0             # optional: used for richer report analysis
+tqdm>=4.66.2              # progress bar
+
+# ── LLM fallback (optional) ────────────────────────────────────────────────
+anthropic>=0.25.0         # only required when llm_enabled=true in config
+
+# ── API / Web Server ───────────────────────────────────────────────────────
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9
+
+# ── Google Drive OAuth & Cloud API ─────────────────────────────────────────
+google-auth>=2.15.0
+google-auth-oauthlib>=1.0.0
+google-api-python-client>=2.0.0
+
+# ── OneDrive OAuth & Cloud API ─────────────────────────────────────────────
+msal>=1.20.0
+requests>=2.28.0
+
+# ── Testing ────────────────────────────────────────────────────────────────
+pytest>=8.1.0
+pytest-cov>=5.0.0
+openai>=1.0.0

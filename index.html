@@ -1,0 +1,2243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📄 AI Document Organizer Dashboard</title>
+    <!-- Premium Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-main: #0b0f19;
+            --bg-card: rgba(17, 24, 39, 0.7);
+            --bg-input: #1f2937;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-glow: rgba(99, 102, 241, 0.35);
+            --accent: #a855f7;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border: rgba(55, 65, 81, 0.8);
+            --border-glow: rgba(99, 102, 241, 0.15);
+            --success: #10b981;
+            --success-glow: rgba(16, 185, 129, 0.2);
+            --error: #f43f5e;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            transition: background-color 0.2s, border-color 0.2s, box-shadow 0.2s;
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, sans-serif;
+            background-color: var(--bg-main);
+            background-image: 
+                radial-gradient(at 10% 20%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
+                radial-gradient(at 90% 80%, rgba(168, 85, 247, 0.08) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: var(--text-main);
+            margin: 0;
+            padding: 24px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .dashboard-container {
+            width: 100%;
+            max-width: 1200px;
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            gap: 24px;
+            margin: 0 auto;
+        }
+
+        @media (max-width: 900px) {
+            .dashboard-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Glassmorphic Cards */
+        .glass-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .glass-card:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+            box-shadow: 0 12px 35px -10px rgba(99, 102, 241, 0.05), 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            background: linear-gradient(135deg, #a5b4fc, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            margin: 0;
+            font-size: 15px;
+        }
+
+        /* Sidebar Settings */
+        .sidebar h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+        }
+
+        .setting-group {
+            margin-bottom: 20px;
+        }
+
+        .setting-group label.setting-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .slider-container input[type="range"] {
+            flex: 1;
+            accent-color: var(--primary);
+            cursor: pointer;
+            height: 6px;
+            border-radius: 3px;
+        }
+
+        .slider-val {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 14px;
+            background: var(--bg-input);
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            min-width: 32px;
+            text-align: center;
+        }
+
+        select, input[type="number"], input[type="text"] {
+            width: 100%;
+            background-color: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+        }
+
+        select:focus, input[type="number"]:focus, input[type="text"]:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        /* Toggle switches */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: var(--bg-input);
+            border: 1px solid var(--border);
+            transition: .3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 3px;
+            bottom: 3px;
+            background-color: var(--text-muted);
+            transition: .3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(20px);
+            background-color: white;
+        }
+
+        /* Categories Checkbox Grid */
+        .categories-title-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .bulk-actions {
+            font-size: 12px;
+            color: var(--primary);
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .bulk-actions:hover {
+            color: var(--accent);
+        }
+
+        .categories-grid {
+            background: rgba(10, 15, 25, 0.4);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 12px;
+            max-height: 220px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .category-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .category-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .category-item input[type="checkbox"] {
+            accent-color: var(--primary);
+            width: 16px;
+            height: 16px;
+            margin-top: 2px;
+            cursor: pointer;
+        }
+
+        .category-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .category-name {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .category-kw-count {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Main Workspace Display */
+        .workspace {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 12px;
+        }
+
+        button {
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex: 1;
+            box-shadow: 0 4px 15px -3px var(--primary-glow);
+            transition: transform 0.1s, box-shadow 0.2s, filter 0.2s;
+        }
+
+        button:hover {
+            filter: brightness(1.1);
+            box-shadow: 0 6px 20px -3px var(--primary-glow);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        button.btn-secondary {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            box-shadow: none;
+        }
+
+        button.btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--text-muted);
+        }
+
+        button:disabled {
+            background: var(--border);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            box-shadow: none;
+            filter: none;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+        }
+
+        .stat-card {
+            background: rgba(10, 15, 25, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .stat-val {
+            font-size: 24px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            background: linear-gradient(135deg, #fff, var(--text-muted));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-val.val-success {
+            background: linear-gradient(135deg, #fff, var(--success));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-val.val-error {
+            background: linear-gradient(135deg, #fff, var(--error));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Progress Area */
+        .progress-wrapper {
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .progress-bar-bg {
+            background: var(--bg-input);
+            height: 8px;
+            border-radius: 4px;
+            width: 100%;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .progress-bar-fill {
+            background: linear-gradient(90deg, var(--primary), var(--accent));
+            height: 100%;
+            width: 0%;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        /* Logs Console */
+        .console-container {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 350px;
+        }
+
+        .console-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        #logs {
+            background-color: #05070c;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            flex: 1;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', 'Consolas', monospace;
+            font-size: 12.5px;
+            color: #38bdf8;
+            line-height: 1.6;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.8);
+            max-height: 400px;
+        }
+
+        .log-entry {
+            margin-bottom: 6px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            padding-bottom: 6px;
+            word-break: break-all;
+        }
+
+        .time {
+            color: var(--text-muted);
+            margin-right: 8px;
+        }
+
+        .category-badge {
+            background-color: var(--success-glow);
+            color: var(--success);
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .error-text {
+            color: var(--error);
+        }
+
+        .info-text {
+            color: #a78bfa;
+        }
+
+        .success-text {
+            color: var(--success);
+        }
+
+        .warning-text {
+            color: var(--warning);
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 7, 12, 0.85);
+            backdrop-filter: blur(8px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 1100px;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            padding: 24px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+            color: var(--text-main);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 14px;
+            margin-bottom: 16px;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #a5b4fc, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 28px;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+
+        .modal-close:hover {
+            color: var(--error);
+        }
+
+        .modal-search {
+            margin-bottom: 16px;
+        }
+
+        .modal-body {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 8px;
+        }
+
+        /* Modal Table */
+        .report-table-container {
+            width: 100%;
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: rgba(5, 7, 12, 0.5);
+        }
+
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13.5px;
+            text-align: left;
+        }
+
+        .report-table th, .report-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        .report-table th {
+            background-color: var(--bg-input);
+            color: var(--text-muted);
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .report-table tr:hover {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .report-table td.error-cell {
+            color: var(--error);
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        /* Premium Mode Switcher Tabs */
+        .mode-tabs {
+            display: flex;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 4px;
+            gap: 4px;
+            margin-bottom: 16px;
+        }
+
+        .mode-tab {
+            flex: 1;
+            text-align: center;
+            padding: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            color: var(--text-muted);
+            user-select: none;
+            transition: all 0.2s ease;
+        }
+
+        .mode-tab:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .mode-tab.active {
+            color: white;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            box-shadow: 0 4px 12px -3px var(--primary-glow);
+        }
+
+        /* Folder Picker Item Styles */
+        .picker-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13.5px;
+            user-select: none;
+            border: 1px solid transparent;
+            transition: all 0.15s ease;
+            color: var(--text-main);
+            text-align: left;
+        }
+
+        .picker-item:hover {
+            background: rgba(99, 102, 241, 0.1);
+            border-color: rgba(99, 102, 241, 0.2);
+        }
+
+        .picker-item.selected {
+            background: rgba(99, 102, 241, 0.2);
+            border-color: var(--primary);
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        
+        <!-- Header banner -->
+        <div class="header">
+            <h1>📄 AI Document Organizer</h1>
+            <p>Smart local directory classifier powered by LLM Keyword Scorer</p>
+        </div>
+
+        <!-- Left: Settings Card -->
+        <div class="glass-card sidebar">
+            <h2>⚙️ Sorting Settings</h2>
+            
+            <div class="setting-group">
+                <label class="setting-label" for="llm-model">LLM Model Override</label>
+                <select id="llm-model">
+                    <option value="gpt-4o">gpt-4o (Recommended)</option>
+                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                    <option value="gpt-4-turbo">gpt-4-turbo</option>
+                    <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <label class="setting-label">Score Threshold (0-10)</label>
+                <div class="slider-container">
+                    <input type="range" id="threshold" min="0" max="10" step="0.5" value="3">
+                    <span class="slider-val" id="threshold-val">3</span>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <label class="setting-label">Pages to Scan (1-20)</label>
+                <div class="slider-container">
+                    <input type="range" id="max-pages" min="1" max="20" step="1" value="3">
+                    <span class="slider-val" id="max-pages-val">3</span>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <label class="setting-label" for="max-files">Max Files to Process</label>
+                <input type="number" id="max-files" min="0" placeholder="No limit (process all files)" value="">
+            </div>
+
+            <div class="toggle-container">
+                <span class="setting-label" style="font-size: 14px; font-weight: 500; color: var(--text-muted);">Copy Files (Instead of Move)</span>
+                <label class="switch">
+                    <input type="checkbox" id="copy-mode">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="setting-group" style="flex: 1; display: flex; flex-direction: column;">
+                <div class="categories-title-bar">
+                    <label class="setting-label" style="margin-bottom: 0;">Active Categories</label>
+                    <div>
+                        <span class="bulk-actions" onclick="toggleAllCategories(true)">All</span> | 
+                        <span class="bulk-actions" onclick="toggleAllCategories(false)">None</span>
+                    </div>
+                </div>
+                <div class="categories-grid" id="categories-list">
+                    <div style="color: var(--text-muted); font-size: 13px; text-align: center; margin-top: 40px;">
+                        Connecting to API...
+                    </div>
+                </div>
+            </div>
+
+            <div class="setting-group" style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px;">
+                <label class="setting-label" style="font-weight: 600; color: var(--text-main); margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">➕ Create Custom Category</label>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <input type="text" id="new-cat-name" placeholder="Category Name (e.g. TAX_FORMS)" style="font-size: 13px;">
+                    <input type="text" id="new-cat-keywords" placeholder="Keywords (comma-separated, e.g. w2, irs, 1099)" style="font-size: 13px;">
+                    <button id="btn-add-cat" style="padding: 10px; font-size: 13px; background: linear-gradient(135deg, var(--primary), var(--accent));">Save Category</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Execution Dashboard -->
+        <div class="glass-card workspace">
+            <!-- Mode Switcher -->
+            <div class="mode-tabs">
+                <div class="mode-tab active" id="tab-local" onclick="switchMode('local')">📁 Local Folder</div>
+                <div class="mode-tab" id="tab-cloud" onclick="switchMode('cloud')">☁️ Google Drive (Cloud)</div>
+                <div class="mode-tab" id="tab-onedrive" onclick="switchMode('onedrive')">☁️ OneDrive</div>
+            </div>
+
+            <!-- Local Workspace Panel -->
+            <div id="panel-local">
+                <div class="button-row">
+                    <button id="btn-select">📁 Select Local Folder & Organize</button>
+                </div>
+            </div>
+
+            <!-- Cloud Workspace Panel -->
+            <div id="panel-cloud" style="display: none;">
+                <!-- Setup Alert -->
+                <div id="cloud-setup-alert" style="display: none; background: rgba(244, 63, 94, 0.15); border: 1px solid var(--error); border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.5; margin-bottom: 12px; color: #fda4af;">
+                    ⚠️ <b>Server Configuration Needed:</b> <code>client_secret.json</code> is missing on the server. Please place Google OAuth credentials JSON in the project root to enable Cloud classification.
+                </div>
+
+                <!-- Authentication status -->
+                <div id="cloud-auth-section" style="margin-bottom: 12px; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <img id="user-picture" src="https://ssl.gstatic.com/images/grids/drive/drive_2020q4_48dp.png" style="width: 32px; height: 32px; border-radius: 50%; display: none;">
+                        <div style="text-align: left;">
+                            <span id="user-status-text" style="font-size: 13px; font-weight: 500; color: var(--text-muted);">Checking Google login status...</span>
+                            <div id="user-email" style="font-size: 11px; color: var(--text-muted); display: none;"></div>
+                        </div>
+                    </div>
+                    <button id="btn-cloud-login" style="padding: 8px 16px; font-size: 13px; max-width: 160px; background: #4285F4; border: none; margin: 0;">Sign in with Google</button>
+                    <button id="btn-cloud-logout" style="padding: 8px 16px; font-size: 13px; max-width: 160px; display: none; margin: 0;" class="btn-secondary">Sign Out</button>
+                </div>
+
+                <!-- Folder selector & process -->
+                <div id="cloud-action-section" style="display: none; border-top: 1px dashed var(--border); padding-top: 12px; margin-top: 12px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; text-align: left;">
+                        <div>
+                            <label class="setting-label" style="display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px;">📥 Google Drive Input Folder</label>
+                            <div style="display: flex; gap: 6px;">
+                                <input type="text" id="cloud-input-folder-name" readonly placeholder="Choose input folder..." style="font-size: 12.5px; cursor: pointer; flex: 1;" onclick="openFolderPicker('input')">
+                                <input type="hidden" id="cloud-input-folder-id">
+                                <button type="button" style="max-width: 42px; padding: 10px; font-size: 13px; margin: 0;" class="btn-secondary" onclick="openFolderPicker('input')">🔍</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="setting-label" style="display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px;">📤 Google Drive Output Folder</label>
+                            <div style="display: flex; gap: 6px;">
+                                <input type="text" id="cloud-output-folder-name" readonly placeholder="Choose output folder..." style="font-size: 12.5px; cursor: pointer; flex: 1;" onclick="openFolderPicker('output')">
+                                <input type="hidden" id="cloud-output-folder-id">
+                                <button type="button" style="max-width: 42px; padding: 10px; font-size: 13px; margin: 0;" class="btn-secondary" onclick="openFolderPicker('output')">🔍</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button id="btn-cloud-classify" style="background: linear-gradient(135deg, var(--success), var(--primary)); box-shadow: 0 4px 15px -3px var(--success-glow); margin-top: 8px;">🚀 Run Cloud Drive Classification</button>
+                </div>
+            </div>
+
+            <!-- OneDrive Panel -->
+            <div id="panel-onedrive" style="display: none;">
+                <!-- OneDrive Mode Switcher Toggle (Local Sync vs. Cloud Account) -->
+                <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                    <button id="btn-od-mode-local" type="button" class="btn-secondary" style="font-size: 13px; padding: 8px; flex: 1;" onclick="switchOneDriveSubMode('local')">📁 Local Sync Folder</button>
+                    <button id="btn-od-mode-cloud" type="button" class="btn-secondary" style="font-size: 13px; padding: 8px; flex: 1;" onclick="switchOneDriveSubMode('cloud')">☁️ Cloud Account (OAuth)</button>
+                </div>
+
+                <!-- OneDrive LOCAL SUB-PANEL -->
+                <div id="od-local-subpanel">
+                    <!-- Status/Connection details -->
+                    <div id="onedrive-status-section" style="margin-bottom: 12px; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; text-align: left;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span id="onedrive-status-text" style="font-size: 13px; font-weight: 500; color: var(--text-muted);">Checking OneDrive status...</span>
+                            <button id="btn-onedrive-refresh" type="button" style="max-width: 100px; padding: 6px 12px; font-size: 12px; margin: 0;" class="btn-secondary">🔄 Refresh</button>
+                        </div>
+                        <div id="onedrive-path-details" style="font-size: 11px; color: var(--text-muted); display: none; word-break: break-all;"></div>
+                    </div>
+
+                    <!-- Run Action -->
+                    <div id="onedrive-action-section" style="border-top: 1px dashed var(--border); padding-top: 12px; margin-top: 12px; display: flex; flex-direction: column; gap: 12px; text-align: left;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div>
+                                <label class="setting-label" style="display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px;">📥 OneDrive Input Folder</label>
+                                <input type="text" id="onedrive-input-folder" placeholder="Default uploads folder or custom path..." style="font-size: 12.5px; width: 100%;">
+                            </div>
+                            <div>
+                                <label class="setting-label" style="display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px;">📤 OneDrive Output Folder</label>
+                                <input type="text" id="onedrive-output-folder" placeholder="Default sorted folder or custom path..." style="font-size: 12.5px; width: 100%;">
+                            </div>
+                        </div>
+                        <button id="btn-onedrive-classify" style="background: linear-gradient(135deg, var(--success), var(--accent)); box-shadow: 0 4px 15px -3px var(--success-glow); margin-top: 8px; width: 100%;">🚀 Run OneDrive Classification</button>
+                    </div>
+                </div>
+
+                <!-- OneDrive CLOUD SUB-PANEL -->
+                <div id="od-cloud-subpanel" style="display: none;">
+                    <!-- Setup Alert -->
+                    <div id="onedrive-setup-alert" style="display: none; background: rgba(244, 63, 94, 0.15); border: 1px solid var(--error); border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.5; margin-bottom: 12px; color: #fda4af; text-align: left;">
+                        ⚠️ <b>Server Configuration Needed:</b> <code>MICROSOFT_CLIENT_ID</code> and <code>MICROSOFT_CLIENT_SECRET</code> are missing in <code>.env</code> on the server. Please add Microsoft App credentials to enable Cloud classification.
+                    </div>
+
+                    <!-- Authentication status -->
+                    <div id="onedrive-auth-section" style="margin-bottom: 12px; background: rgba(255,255,255,0.03); padding: 12px; border-radius: 8px; border: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <img id="od-user-picture" src="https://upload.wikimedia.org/wikipedia/commons/3/3c/Microsoft_Office_OneDrive_%282019%E2%80%93present%29.svg" style="width: 32px; height: 32px; display: block;">
+                            <div style="text-align: left;">
+                                <span id="od-user-status-text" style="font-size: 13px; font-weight: 500; color: var(--text-muted);">Checking OneDrive login status...</span>
+                                <div id="od-user-email" style="font-size: 11px; color: var(--text-muted); display: none;"></div>
+                            </div>
+                        </div>
+                        <button id="btn-onedrive-login" style="padding: 8px 16px; font-size: 13px; max-width: 180px; background: #0078d4; border: none; margin: 0; color: white;">Sign in with Microsoft</button>
+                        <button id="btn-onedrive-logout" style="padding: 8px 16px; font-size: 13px; max-width: 160px; display: none; margin: 0;" class="btn-secondary">Sign Out</button>
+                    </div>
+
+                    <!-- Folder selector & process -->
+                    <div id="onedrive-cloud-action-section" style="display: none; border-top: 1px dashed var(--border); padding-top: 12px; margin-top: 12px; text-align: left;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                            <div>
+                                <label class="setting-label" style="display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px;">📥 OneDrive Input Folder</label>
+                                <div style="display: flex; gap: 6px;">
+                                    <input type="text" id="onedrive-cloud-input-name" readonly placeholder="Choose input folder..." style="font-size: 12.5px; cursor: pointer; flex: 1;" onclick="openOneDriveFolderPicker('input')">
+                                    <input type="hidden" id="onedrive-cloud-input-id">
+                                    <button type="button" style="max-width: 42px; padding: 10px; font-size: 13px; margin: 0;" class="btn-secondary" onclick="openOneDriveFolderPicker('input')">🔍</button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="setting-label" style="display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px;">📤 OneDrive Output Folder</label>
+                                <div style="display: flex; gap: 6px;">
+                                    <input type="text" id="onedrive-cloud-output-name" readonly placeholder="Choose output folder..." style="font-size: 12.5px; cursor: pointer; flex: 1;" onclick="openOneDriveFolderPicker('output')">
+                                    <input type="hidden" id="onedrive-cloud-output-id">
+                                    <button type="button" style="max-width: 42px; padding: 10px; font-size: 13px; margin: 0;" class="btn-secondary" onclick="openOneDriveFolderPicker('output')">🔍</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button id="btn-onedrive-cloud-classify" style="background: linear-gradient(135deg, var(--success), var(--primary)); box-shadow: 0 4px 15px -3px var(--success-glow); margin-top: 8px; width: 100%;">🚀 Run OneDrive Cloud Classification</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="button-row" style="margin-top: 10px; margin-bottom: 12px;">
+                <button id="btn-view-report" class="btn-secondary" disabled>👁️ View Report</button>
+                <button id="btn-download-report" class="btn-secondary" disabled>📥 Download CSV</button>
+            </div>
+
+            <!-- Stats dashboard -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-val" id="stat-total">0</span>
+                    <span class="stat-label">Total Files</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-val val-success" id="stat-success">0</span>
+                    <span class="stat-label">Success</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-val val-error" id="stat-failed">0</span>
+                    <span class="stat-label">Failed</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-val" id="stat-time">0.0s</span>
+                    <span class="stat-label">Elapsed Time</span>
+                </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="progress-wrapper" id="progress-area">
+                <div class="progress-text">
+                    <span id="progress-status">Processing files...</span>
+                    <span id="progress-percent">0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" id="progress-fill"></div>
+                </div>
+            </div>
+
+            <!-- Console logs -->
+            <div class="console-container">
+                <div class="console-header">
+                    <span>Execution Console</span>
+                    <span style="font-size: 11px; cursor: pointer; text-decoration: underline;" onclick="clearLogs()">Clear Console</span>
+                </div>
+                <div id="logs">Select a directory to launch the pipeline...</div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Report Modal -->
+    <div class="modal-overlay" id="report-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📊 Batch Classification Report</h3>
+                <button class="modal-close" id="btn-close-modal">&times;</button>
+            </div>
+            <div class="modal-search">
+                <input type="text" id="report-search-input" placeholder="🔍 Search report by file name, category, or type...">
+            </div>
+            <div class="modal-body">
+                <div class="report-table-container">
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th>File Name</th>
+                                <th>Present Path</th>
+                                <th>Moved Path</th>
+                                <th>Category</th>
+                                <th>Scanned/Digital</th>
+                                <th>Confidence</th>
+                                <th>Time (s)</th>
+                                <th>Error</th>
+                            </tr>
+                        </thead>
+                        <tbody id="report-table-body">
+                            <!-- Rows injected dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Folder Selector Modal for Cloud Drive -->
+    <div class="modal-overlay" id="picker-modal">
+        <div class="modal-content" style="max-width: 500px; max-height: 70vh;">
+            <div class="modal-header">
+                <h3 id="picker-title">Select Folder</h3>
+                <button class="modal-close" onclick="closeFolderPicker()">&times;</button>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 13.5px; width: 100%;">
+                <span style="color: var(--text-muted);">Current: <b id="picker-path" style="color: var(--text-main);">Root</b></span>
+                <button id="btn-picker-up" style="max-width: 80px; padding: 6px 10px; font-size: 12.5px; margin: 0;" class="btn-secondary" onclick="pickerNavigateUp()">Up ⬆️</button>
+            </div>
+            <div class="modal-body" style="border: 1px solid var(--border); border-radius: 8px; background: rgba(5, 7, 12, 0.5); max-height: 300px; overflow-y: auto; width: 100%;">
+                <div id="picker-list" style="display: flex; flex-direction: column; gap: 4px; padding: 8px;">
+                    <!-- Dynamically loaded folders -->
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px; margin-top: 16px; justify-content: flex-end; width: 100%;">
+                <button class="btn-secondary" onclick="closeFolderPicker()" style="max-width: 100px; padding: 10px 16px; margin: 0;">Cancel</button>
+                <button onclick="confirmPickerSelection()" style="background: var(--success); box-shadow: 0 4px 15px -3px var(--success-glow); max-width: 150px; padding: 10px 16px; margin: 0;">Select Folder</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // UI Elements
+        const btnSelect = document.getElementById('btn-select');
+        const logsDiv = document.getElementById('logs');
+        
+        const thresholdInput = document.getElementById('threshold');
+        const thresholdVal = document.getElementById('threshold-val');
+        const maxPagesInput = document.getElementById('max-pages');
+        const maxPagesVal = document.getElementById('max-pages-val');
+        
+        const llmModelSelect = document.getElementById('llm-model');
+        const maxFilesInput = document.getElementById('max-files');
+        const copyModeCheck = document.getElementById('copy-mode');
+        const categoriesList = document.getElementById('categories-list');
+        
+        const progressArea = document.getElementById('progress-area');
+        const progressStatus = document.getElementById('progress-status');
+        const progressPercent = document.getElementById('progress-percent');
+        const progressFill = document.getElementById('progress-fill');
+        
+        // Stats Elements
+        const statTotal = document.getElementById('stat-total');
+        const statSuccess = document.getElementById('stat-success');
+        const statFailed = document.getElementById('stat-failed');
+        const statTime = document.getElementById('stat-time');
+
+        const CLASSIFY_URL = "/classify/pdf";
+
+        // Report Buttons & Modal Elements
+        const btnViewReport = document.getElementById('btn-view-report');
+        const btnDownloadReport = document.getElementById('btn-download-report');
+        const reportModal = document.getElementById('report-modal');
+        const btnCloseModal = document.getElementById('btn-close-modal');
+        const reportSearchInput = document.getElementById('report-search-input');
+        const reportTableBody = document.getElementById('report-table-body');
+
+        let currentSessionResults = [];
+
+        function showReportModal() {
+            renderReportTable();
+            reportModal.style.display = 'flex';
+        }
+
+        function closeReportModal() {
+            reportModal.style.display = 'none';
+        }
+
+        function renderReportTable() {
+            const query = reportSearchInput.value.toLowerCase().trim();
+            reportTableBody.innerHTML = '';
+            
+            const filtered = currentSessionResults.filter(r => {
+                return r.file_name.toLowerCase().includes(query) ||
+                       r.category.toLowerCase().includes(query) ||
+                       r.pdf_type.toLowerCase().includes(query) ||
+                       r.error.toLowerCase().includes(query);
+            });
+
+            if (filtered.length === 0) {
+                reportTableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted);">No records found matching query.</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(r => {
+                const tr = document.createElement('tr');
+                
+                const typeText = r.pdf_type ? r.pdf_type.toUpperCase() : 'UNKNOWN';
+                const confidenceVal = parseFloat(r.confidence) || 0.0;
+                
+                tr.innerHTML = `
+                    <td>${escapeHtml(r.file_name)}</td>
+                    <td><span style="font-family: monospace; font-size: 12px; color: var(--text-muted);">${escapeHtml(r.original_path)}</span></td>
+                    <td><span style="font-family: monospace; font-size: 12px; color: var(--success);">${escapeHtml(r.destination_folder)}</span></td>
+                    <td><span class="category-badge">${escapeHtml(r.category)}</span></td>
+                    <td><span style="font-weight: 500; color: ${typeText === 'DIGITAL' ? '#38bdf8' : typeText === 'SCANNED' ? '#fb7185' : 'var(--text-muted)'}">${typeText}</span></td>
+                    <td>${confidenceVal.toFixed(4)}</td>
+                    <td>${parseFloat(r.processing_time).toFixed(2)}s</td>
+                    <td class="${r.error ? 'error-cell' : ''}" title="${escapeHtml(r.error)}">${r.error ? escapeHtml(r.error) : '<span style="color: var(--success);">None</span>'}</td>
+                `;
+                reportTableBody.appendChild(tr);
+            });
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        btnViewReport.addEventListener('click', showReportModal);
+        btnCloseModal.addEventListener('click', closeReportModal);
+        reportSearchInput.addEventListener('input', renderReportTable);
+        btnDownloadReport.addEventListener('click', () => {
+            if (currentSessionResults.length === 0) return;
+            
+            let csvContent = "file_name,original_path,destination_folder,category,pdf_type,confidence,processing_time,error\n";
+            currentSessionResults.forEach(r => {
+                const esc = (val) => {
+                    if (val === null || val === undefined) return '""';
+                    const str = String(val).replace(/"/g, '""');
+                    return `"${str}"`;
+                };
+                csvContent += `${esc(r.file_name)},${esc(r.original_path)},${esc(r.destination_folder)},${esc(r.category)},${esc(r.pdf_type)},${esc(r.confidence)},${esc(r.processing_time)},${esc(r.error)}\n`;
+            });
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", `batch_report_${new Date().toISOString().slice(0,10)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        // Close modal when clicking outside modal-content
+        window.addEventListener('click', (e) => {
+            if (e.target === reportModal) {
+                closeReportModal();
+            }
+        });
+
+        // Sliders feedback
+        thresholdInput.addEventListener('input', () => {
+            thresholdVal.textContent = thresholdInput.value;
+        });
+
+        maxPagesInput.addEventListener('input', () => {
+            maxPagesVal.textContent = maxPagesInput.value;
+        });
+
+        // Initialize UI Settings on Page Load
+        window.addEventListener('DOMContentLoaded', loadConfig);
+
+        async function loadConfig() {
+            try {
+                const res = await fetch('/config');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                
+                // Initialize form values from config defaults
+                if (data.llm_model) llmModelSelect.value = data.llm_model;
+                if (data.min_score_threshold !== undefined) {
+                    thresholdInput.value = data.min_score_threshold;
+                    thresholdVal.textContent = data.min_score_threshold;
+                }
+                if (data.pdf_max_pages !== undefined) {
+                    maxPagesInput.value = data.pdf_max_pages;
+                    maxPagesVal.textContent = data.pdf_max_pages;
+                }
+
+                // Render categories list
+                if (data.categories && data.categories.length > 0) {
+                    categoriesList.innerHTML = '';
+                    data.categories.forEach(cat => {
+                        const div = document.createElement('div');
+                        div.className = 'category-item';
+                        div.onclick = (e) => {
+                            // don't toggle twice if clicked checkbox directly
+                            if (e.target.tagName !== 'INPUT') {
+                                const cb = div.querySelector('input');
+                                cb.checked = !cb.checked;
+                            }
+                        };
+                        div.innerHTML = `
+                            <input type="checkbox" value="${cat.name}" checked>
+                            <div class="category-info">
+                                <span class="category-name">${cat.name}</span>
+                                <span class="category-kw-count">${cat.keyword_count} keywords: <i style="opacity: 0.8;">${cat.keywords.slice(0, 4).join(', ')}...</i></span>
+                            </div>
+                        `;
+                        categoriesList.appendChild(div);
+                    });
+                } else {
+                    categoriesList.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; text-align: center; margin-top: 40px;">No categories configured on server.</div>';
+                }
+            } catch (err) {
+                console.error("Error loading config:", err);
+                categoriesList.innerHTML = `<div style="color: var(--error); font-size: 13px; text-align: center; margin-top: 40px;">Failed to load config from server: ${err.message}</div>`;
+                log(`Server configuration retrieval failed: ${err.message}`, 'error');
+            }
+        }
+
+        function toggleAllCategories(checked) {
+            const checkboxes = categoriesList.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(cb => cb.checked = checked);
+        }
+
+        function clearLogs() {
+            logsDiv.innerHTML = "Select a directory to launch the pipeline...";
+        }
+
+        // Add custom category dynamic logic
+        const btnAddCat = document.getElementById('btn-add-cat');
+        if (btnAddCat) {
+            btnAddCat.addEventListener('click', async () => {
+                const nameInput = document.getElementById('new-cat-name');
+                const keywordsInput = document.getElementById('new-cat-keywords');
+                
+                const name = nameInput.value.trim();
+                const kwsRaw = keywordsInput.value.trim();
+                
+                if (!name || !kwsRaw) {
+                    alert("Please enter both a category name and keywords.");
+                    return;
+                }
+                
+                const keywords = kwsRaw.split(',').map(k => k.trim()).filter(k => k);
+                if (keywords.length === 0) {
+                    alert("Please enter at least one valid keyword.");
+                    return;
+                }
+                
+                try {
+                    btnAddCat.disabled = true;
+                    btnAddCat.textContent = "Saving...";
+                    const res = await fetch('/config/categories', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, keywords })
+                    });
+                    
+                    if (!res.ok) {
+                        const errData = await res.json();
+                        throw new Error(errData.detail || `Server returned HTTP ${res.status}`);
+                    }
+                    
+                    nameInput.value = '';
+                    keywordsInput.value = '';
+                    
+                    await loadConfig();
+                    log(`Custom category <b>${name}</b> added and loaded!`, 'success');
+                    alert("Category saved successfully!");
+                } catch (err) {
+                    log(`Failed to add custom category: ${err.message}`, 'error');
+                    alert(`Error: ${err.message}`);
+                } finally {
+                    btnAddCat.disabled = false;
+                    btnAddCat.textContent = "Save Category";
+                }
+            });
+        }
+
+        function log(message, type = 'normal') {
+            const timeStr = new Date().toLocaleTimeString();
+            let content = `<span class="time">[${timeStr}]</span> ${message}`;
+            if (type === 'error') {
+                content = `<span class="time">[${timeStr}]</span> <span class="error-text">❌ ${message}</span>`;
+            } else if (type === 'success') {
+                content = `<span class="time">[${timeStr}]</span> <span class="success-text">✅ ${message}</span>`;
+            } else if (type === 'info') {
+                content = `<span class="time">[${timeStr}]</span> <span class="info-text">✨ ${message}</span>`;
+            } else if (type === 'warning') {
+                content = `<span class="time">[${timeStr}]</span> <span class="warning-text">⚠️ ${message}</span>`;
+            }
+            
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            div.innerHTML = content;
+            
+            if (logsDiv.innerHTML.startsWith("Select a directory") || logsDiv.innerHTML.startsWith("Select a folder")) {
+                logsDiv.innerHTML = "";
+            }
+            logsDiv.appendChild(div);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        // Folder selection & sorting loop
+        btnSelect.addEventListener('click', async () => {
+            let timerInterval = null;
+            const results = [];
+            btnViewReport.disabled = true;
+            btnDownloadReport.disabled = true;
+            currentSessionResults = [];
+            try {
+                // 1. Gather checked categories
+                const checkedBoxes = categoriesList.querySelectorAll('input[type="checkbox"]:checked');
+                const selectedCats = Array.from(checkedBoxes).map(cb => cb.value);
+                
+                if (selectedCats.length === 0) {
+                    alert("Please select at least one active category to classify documents.");
+                    return;
+                }
+
+                // 2. Request user permission to read/write a directory
+                log("Prompting for local directory access...");
+                const dirHandle = await window.showDirectoryPicker();
+                
+                // Request readwrite permissions explicitly immediately while user activation is active
+                const permOpts = { mode: 'readwrite' };
+                if (await dirHandle.queryPermission(permOpts) !== 'granted') {
+                    log("Requesting edit permissions on directory...");
+                    if (await dirHandle.requestPermission(permOpts) !== 'granted') {
+                        throw new Error("Read-write permission is required to edit files in the folder.");
+                    }
+                }
+                
+                log(`Successfully mounted local directory: <b>${dirHandle.name}</b>`, 'info');
+                
+                btnSelect.disabled = true;
+                progressArea.style.display = 'flex';
+                
+                // Pre-create all category directories immediately while user activation is active
+                log("Pre-creating category folders...", "info");
+                const folderHandles = {};
+                for (const cat of selectedCats) {
+                    folderHandles[cat] = await dirHandle.getDirectoryHandle(cat, { create: true });
+                }
+                folderHandles["Others"] = await dirHandle.getDirectoryHandle("Others", { create: true });
+                
+                // Reset stats
+                statTotal.textContent = '0';
+                statSuccess.textContent = '0';
+                statFailed.textContent = '0';
+                statTime.textContent = '0.0s';
+                
+                // Collect PDF files
+                const allFiles = [];
+                for await (const entry of dirHandle.values()) {
+                    if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.pdf')) {
+                        allFiles.push(entry);
+                    }
+                }
+                
+                let totalFiles = allFiles.length;
+                if (totalFiles === 0) {
+                    log("No PDF files found in the root directory.", 'warning');
+                    btnSelect.disabled = false;
+                    progressArea.style.display = 'none';
+                    return;
+                }
+
+                // Apply limit if specified
+                const limitVal = parseInt(maxFilesInput.value, 10);
+                let filesToProcess = allFiles;
+                if (limitVal > 0 && limitVal < totalFiles) {
+                    filesToProcess = allFiles.slice(0, limitVal);
+                    totalFiles = filesToProcess.length;
+                    log(`Applied file count limit: Processing first ${totalFiles} PDF(s) out of ${allFiles.length} found.`, 'info');
+                } else {
+                    log(`Found ${totalFiles} PDF(s) to process. Starting sorting pipeline...`, 'info');
+                }
+
+                statTotal.textContent = totalFiles;
+                
+                let successCount = 0;
+                let failedCount = 0;
+                
+                const startTime = performance.now();
+                timerInterval = setInterval(() => {
+                    const elapsed = (performance.now() - startTime) / 1000;
+                    statTime.textContent = `${elapsed.toFixed(1)}s`;
+                }, 100);
+
+                const threshold = parseFloat(thresholdInput.value);
+                const maxPages = parseInt(maxPagesInput.value, 10);
+                const llmModel = llmModelSelect.value;
+                const copyMode = copyModeCheck.checked;
+
+                // 3. Process files sequentially
+                for (let i = 0; i < totalFiles; i++) {
+                    const entry = filesToProcess[i];
+                    
+                    // Update progress bar
+                    const percent = Math.round((i / totalFiles) * 100);
+                    progressPercent.textContent = `${percent}%`;
+                    progressFill.style.width = `${percent}%`;
+                    progressStatus.textContent = `Processing (${i + 1}/${totalFiles}): ${entry.name}`;
+                    
+                    log(`Processing file [${i + 1}/${totalFiles}]: <i>${entry.name}</i>`);
+                    
+                    try {
+                        const file = await entry.getFile();
+                        
+                        // Prepare Form Data for upload
+                        const formData = new FormData();
+                        formData.append("file", file);
+                        
+                        // Build query parameters
+                        const params = new URLSearchParams({
+                            max_pages: maxPages,
+                            llm_model: llmModel,
+                            threshold: threshold,
+                            categories: selectedCats.join(',')
+                        });
+                        
+                        const classifyStart = performance.now();
+                        const response = await fetch(`${CLASSIFY_URL}?${params.toString()}`, {
+                            method: "POST",
+                            body: formData
+                        });
+
+                        if (!response.ok) {
+                            throw new Error(`Server returned HTTP ${response.status}`);
+                        }
+
+                        const result = await response.json();
+                        const classifyDuration = ((performance.now() - classifyStart) / 1000).toFixed(2);
+                        
+                        const category = result.category || "Others";
+                        const score = result.llm_score_0_10 || 0;
+                        const docType = result.pdf_type || "unknown";
+                        
+                        log(`Classification result: <span class="category-badge">${category}</span> (Score: ${score}/10, Type: ${docType.toUpperCase()}) in ${classifyDuration}s`, 'success');
+                        
+                        // Place file inside pre-created folder
+                        const targetFolder = folderHandles[category] || folderHandles["Others"];
+                        const newFileHandle = await targetFolder.getFileHandle(entry.name, { create: true });
+                        
+                        const writable = await newFileHandle.createWritable();
+                        await writable.write(file);
+                        await writable.close();
+                        
+                        if (!copyMode) {
+                            // Delete from root
+                            await dirHandle.removeEntry(entry.name);
+                            log(`Moved <i>${entry.name}</i> into folder: <b>${category}/</b>`);
+                        } else {
+                            log(`Copied <i>${entry.name}</i> into folder: <b>${category}/</b>`);
+                        }
+                        
+                        results.push({
+                            file_name: entry.name,
+                            original_path: entry.name,
+                            destination_folder: `${category}/`,
+                            category: category,
+                            pdf_type: docType,
+                            confidence: (score / 10).toFixed(4),
+                            processing_time: classifyDuration,
+                            error: ""
+                        });
+
+                        successCount++;
+                        statSuccess.textContent = successCount;
+                        
+                    } catch (err) {
+                        log(`Failed to process file "${entry.name}": ${err.message}`, 'error');
+                        
+                        results.push({
+                            file_name: entry.name,
+                            original_path: entry.name,
+                            destination_folder: "",
+                            category: "Others",
+                            pdf_type: "unknown",
+                            confidence: "0.0000",
+                            processing_time: "0.00",
+                            error: err.message || "Unknown error"
+                        });
+
+                        failedCount++;
+                        statFailed.textContent = failedCount;
+                    }
+                    log("------------------------------------------------------------------");
+                }
+
+                // 4. Generate/Update local CSV report in the selected folder (Append-only)
+                if (results.length > 0) {
+                    try {
+                        log("Updating classification_report.csv locally...", "info");
+                        let existingContent = "";
+                        let fileExists = false;
+                        
+                        try {
+                            const existingFileHandle = await dirHandle.getFileHandle("classification_report.csv", { create: false });
+                            const file = await existingFileHandle.getFile();
+                            existingContent = await file.text();
+                            fileExists = true;
+                        } catch (e) {
+                            // File doesn't exist yet
+                        }
+                        
+                        const reportFile = await dirHandle.getFileHandle("classification_report.csv", { create: true });
+                        const writable = await reportFile.createWritable();
+                        
+                        let csvContent = "";
+                        if (fileExists && existingContent.trim().length > 0) {
+                            csvContent = existingContent;
+                            if (!csvContent.endsWith("\n")) {
+                                csvContent += "\n";
+                            }
+                        } else {
+                            csvContent = "file_name,original_path,destination_folder,category,pdf_type,confidence,processing_time,error\n";
+                        }
+                        
+                        results.forEach(r => {
+                            const esc = (val) => {
+                                if (val === null || val === undefined) return '""';
+                                const str = String(val).replace(/"/g, '""');
+                                return `"${str}"`;
+                            };
+                            csvContent += `${esc(r.file_name)},${esc(r.original_path)},${esc(r.destination_folder)},${esc(r.category)},${esc(r.pdf_type)},${esc(r.confidence)},${esc(r.processing_time)},${esc(r.error)}\n`;
+                        });
+                        
+                        await writable.write(csvContent);
+                        await writable.close();
+                        log("Successfully saved classification_report.csv locally in the selected folder!", "success");
+                    } catch (reportErr) {
+                        log(`Failed to save classification_report.csv locally: ${reportErr.message}`, "error");
+                    }
+                    
+                    // 5. Send CSV data to backend to save on the server
+                    try {
+                        log("Sending report to backend server...", "info");
+                        const res = await fetch("/report/save", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ results })
+                        });
+                        if (!res.ok) {
+                            const errData = await res.json();
+                            throw new Error(errData.detail || `Server returned HTTP ${res.status}`);
+                        }
+                        const backendResult = await res.json();
+                        log(`Successfully saved classification_report.csv on the server backend! (Path: ${backendResult.report_path})`, "success");
+                    } catch (backendErr) {
+                        log(`Failed to save report on server backend: ${backendErr.message}`, "error");
+                    }
+                }
+                
+                // Final Progress update
+                progressPercent.textContent = `100%`;
+                progressFill.style.width = `100%`;
+                progressStatus.textContent = `Complete!`;
+                
+                clearInterval(timerInterval);
+                const totalElapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+                statTime.textContent = `${totalElapsed}s`;
+                
+                currentSessionResults = results;
+                btnViewReport.disabled = false;
+                btnDownloadReport.disabled = false;
+                
+                log(`Pipeline finished! Processed: ${totalFiles} | Success: ${successCount} | Failed: ${failedCount} | Elapsed Time: ${totalElapsed}s`, 'info');
+                
+            } catch (err) {
+                log(`Pipeline error: ${err.message}`, 'error');
+                console.error(err);
+                if (timerInterval) clearInterval(timerInterval);
+            } finally {
+                btnSelect.disabled = false;
+            }
+        });
+
+        // ── Google Drive Cloud Mode Implementation ───────────────────────────
+        let activeMode = 'local';
+        let oauthConfigured = false;
+        let pickerTarget = 'input'; // 'input' or 'output'
+        let currentPickerFolderId = 'root';
+        let selectedPickerFolderId = null;
+        let selectedPickerFolderName = '';
+        let pickerPathStack = [{ id: 'root', name: 'Root' }];
+        let pickerProvider = 'google'; // 'google' or 'onedrive'
+
+        // Check login and config on load
+        window.addEventListener('DOMContentLoaded', async () => {
+            await checkOAuthSetup();
+            await checkGoogleLogin();
+        });
+
+        function switchMode(mode) {
+            activeMode = mode;
+            document.getElementById('tab-local').classList.toggle('active', mode === 'local');
+            document.getElementById('tab-cloud').classList.toggle('active', mode === 'cloud');
+            document.getElementById('tab-onedrive').classList.toggle('active', mode === 'onedrive');
+            
+            document.getElementById('panel-local').style.display = mode === 'local' ? 'block' : 'none';
+            document.getElementById('panel-cloud').style.display = mode === 'cloud' ? 'block' : 'none';
+            document.getElementById('panel-onedrive').style.display = mode === 'onedrive' ? 'block' : 'none';
+            
+            log(`Switched to ${mode === 'local' ? 'Local Folder' : mode === 'cloud' ? 'Google Drive (Cloud)' : 'OneDrive'} mode.`, 'info');
+            if (mode === 'onedrive') {
+                checkOneDriveStatus();
+            }
+        }
+
+        async function checkOAuthSetup() {
+            try {
+                const res = await fetch('/google/check-setup');
+                const data = await res.json();
+                oauthConfigured = data.oauth_configured;
+                document.getElementById('cloud-setup-alert').style.display = oauthConfigured ? 'none' : 'block';
+                document.getElementById('btn-cloud-login').disabled = !oauthConfigured;
+            } catch (err) {
+                console.error("Error checking OAuth setup:", err);
+            }
+        }
+
+        async function checkGoogleLogin() {
+            try {
+                const res = await fetch('/google/profile');
+                const data = await res.json();
+                
+                const userPicture = document.getElementById('user-picture');
+                const userStatusText = document.getElementById('user-status-text');
+                const userEmail = document.getElementById('user-email');
+                const btnLogin = document.getElementById('btn-cloud-login');
+                const btnLogout = document.getElementById('btn-cloud-logout');
+                const actionSection = document.getElementById('cloud-action-section');
+                
+                if (data.authenticated) {
+                    userStatusText.textContent = data.name || "Signed in";
+                    userEmail.textContent = data.email || "";
+                    userEmail.style.display = 'block';
+                    if (data.picture) {
+                        userPicture.src = data.picture;
+                        userPicture.style.display = 'block';
+                    } else {
+                        userPicture.style.display = 'none';
+                    }
+                    btnLogin.style.display = 'none';
+                    btnLogout.style.display = 'block';
+                    actionSection.style.display = 'block';
+                } else {
+                    userStatusText.textContent = "Not signed in to Google Drive";
+                    userEmail.style.display = 'none';
+                    userPicture.style.display = 'none';
+                    btnLogin.style.display = 'block';
+                    btnLogout.style.display = 'none';
+                    actionSection.style.display = 'none';
+                }
+            } catch (err) {
+                console.error("Error checking Google login status:", err);
+            }
+        }
+
+        // Login / Logout buttons
+        document.getElementById('btn-cloud-login').addEventListener('click', () => {
+            window.location.href = '/google/login';
+        });
+
+        document.getElementById('btn-cloud-logout').addEventListener('click', async () => {
+            window.location.href = '/google/logout';
+        });
+
+        // Folder Picker navigation logic
+        const pickerModal = document.getElementById('picker-modal');
+
+        function openGeneralFolderPicker(target) {
+            pickerTarget = target;
+            document.getElementById('picker-title').textContent = `Select ${target === 'input' ? 'Input' : 'Output'} Folder`;
+            currentPickerFolderId = 'root';
+            selectedPickerFolderId = null;
+            selectedPickerFolderName = '';
+            pickerPathStack = [{ id: 'root', name: 'Root' }];
+            pickerNavigateTo('root', 'Root');
+            pickerModal.style.display = 'flex';
+        }
+
+        function openFolderPicker(target) {
+            pickerProvider = 'google';
+            openGeneralFolderPicker(target);
+        }
+
+        function openOneDriveFolderPicker(target) {
+            pickerProvider = 'onedrive';
+            openGeneralFolderPicker(target);
+        }
+
+        function closeFolderPicker() {
+            pickerModal.style.display = 'none';
+        }
+
+        async function pickerNavigateTo(folderId, pathName) {
+            currentPickerFolderId = folderId;
+            document.getElementById('picker-path').textContent = pickerPathStack.map(p => p.name).join(' / ');
+            const listDiv = document.getElementById('picker-list');
+            listDiv.innerHTML = '<div style="color: var(--text-muted); font-size: 13.5px; text-align: center; padding: 20px;">Loading folders...</div>';
+
+            try {
+                const fetchUrl = pickerProvider === 'google' 
+                    ? `/google/drive/folders?parent_id=${folderId}` 
+                    : `/onedrive/folders?parent_id=${folderId}`;
+                const res = await fetch(fetchUrl);
+                if (!res.ok) throw new Error("Failed to load folders.");
+                const data = await res.json();
+                
+                listDiv.innerHTML = '';
+                if (data.folders && data.folders.length > 0) {
+                    data.folders.forEach(folder => {
+                        const div = document.createElement('div');
+                        div.className = 'picker-item';
+                        div.innerHTML = `📁 ${escapeHtml(folder.name)}`;
+                        div.onclick = (e) => {
+                            // Single click selects, double click enters
+                            document.querySelectorAll('.picker-item').forEach(item => item.classList.remove('selected'));
+                            div.classList.add('selected');
+                            selectedPickerFolderId = folder.id;
+                            selectedPickerFolderName = folder.name;
+                        };
+                        div.ondblclick = () => {
+                            pickerPathStack.push({ id: folder.id, name: folder.name });
+                            pickerNavigateTo(folder.id, folder.name);
+                        };
+                        listDiv.appendChild(div);
+                    });
+                } else {
+                    listDiv.innerHTML = '<div style="color: var(--text-muted); font-size: 13.5px; text-align: center; padding: 20px;">No folders found here.</div>';
+                }
+            } catch (err) {
+                listDiv.innerHTML = `<div style="color: var(--error); font-size: 13.5px; text-align: center; padding: 20px;">Error: ${err.message}</div>`;
+            }
+        }
+
+        function pickerNavigateUp() {
+            if (pickerPathStack.length <= 1) return; // already at Root
+            pickerPathStack.pop();
+            const parent = pickerPathStack[pickerPathStack.length - 1];
+            pickerNavigateTo(parent.id, parent.name);
+        }
+
+        function confirmPickerSelection() {
+            if (!selectedPickerFolderId) {
+                const currentFolder = pickerPathStack[pickerPathStack.length - 1];
+                selectedPickerFolderId = currentFolder.id;
+                selectedPickerFolderName = currentFolder.name;
+            }
+
+            if (pickerProvider === 'google') {
+                if (pickerTarget === 'input') {
+                    document.getElementById('cloud-input-folder-name').value = selectedPickerFolderName;
+                    document.getElementById('cloud-input-folder-id').value = selectedPickerFolderId;
+                } else {
+                    document.getElementById('cloud-output-folder-name').value = selectedPickerFolderName;
+                    document.getElementById('cloud-output-folder-id').value = selectedPickerFolderId;
+                }
+            } else {
+                if (pickerTarget === 'input') {
+                    document.getElementById('onedrive-cloud-input-name').value = selectedPickerFolderName;
+                    document.getElementById('onedrive-cloud-input-id').value = selectedPickerFolderId;
+                } else {
+                    document.getElementById('onedrive-cloud-output-name').value = selectedPickerFolderName;
+                    document.getElementById('onedrive-cloud-output-id').value = selectedPickerFolderId;
+                }
+            }
+            closeFolderPicker();
+        }
+
+        // Run Cloud Classification
+        document.getElementById('btn-cloud-classify').addEventListener('click', async () => {
+            const inputId = document.getElementById('cloud-input-folder-id').value;
+            const outputId = document.getElementById('cloud-output-folder-id').value;
+            const inputName = document.getElementById('cloud-input-folder-name').value;
+            const outputName = document.getElementById('cloud-output-folder-name').value;
+
+            if (!inputId || !outputId) {
+                alert("Please select both input and output folders in Google Drive.");
+                return;
+            }
+
+            // Gather sorting configurations
+            const checkedBoxes = categoriesList.querySelectorAll('input[type="checkbox"]:checked');
+            const selectedCats = Array.from(checkedBoxes).map(cb => cb.value);
+            
+            if (selectedCats.length === 0) {
+                alert("Please select at least one active category.");
+                return;
+            }
+
+            const threshold = parseFloat(thresholdInput.value);
+            const maxPages = parseInt(maxPagesInput.value, 10);
+            const llmModel = llmModelSelect.value;
+            const copyMode = copyModeCheck.checked;
+            const limitVal = parseInt(maxFilesInput.value, 10);
+            const maxFiles = isNaN(limitVal) ? null : limitVal;
+
+            btnViewReport.disabled = true;
+            btnDownloadReport.disabled = true;
+            currentSessionResults = [];
+
+            log(`Starting Cloud Classification: <b>${inputName}</b> ➔ <b>${outputName}</b>`, 'info');
+            document.getElementById('btn-cloud-classify').disabled = true;
+            progressArea.style.display = 'flex';
+            progressPercent.textContent = `0%`;
+            progressFill.style.width = `0%`;
+            progressStatus.textContent = `Triggering server classification...`;
+
+            let timerInterval = null;
+            const startTime = performance.now();
+            timerInterval = setInterval(() => {
+                const elapsed = (performance.now() - startTime) / 1000;
+                statTime.textContent = `${elapsed.toFixed(1)}s`;
+            }, 100);
+
+            try {
+                const response = await fetch('/google/drive/classify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        drive_input_folder_id: inputId,
+                        drive_output_folder_id: outputId,
+                        copy_mode: copyMode,
+                        dry_run: false,
+                        pdf_max_pages: maxPages,
+                        min_score: threshold,
+                        llm_model: llmModel,
+                        categories: selectedCats,
+                        max_files: maxFiles
+                    })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || `Server returned HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                clearInterval(timerInterval);
+                const totalElapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+                statTime.textContent = `${totalElapsed}s`;
+
+                // Update Stats
+                statTotal.textContent = result.pdfs_processed || '0';
+                
+                let success = 0;
+                let failed = 0;
+                const results = [];
+
+                if (result.pipeline_results) {
+                    result.pipeline_results.forEach(r => {
+                        if (r.error) {
+                            failed++;
+                            log(`File <i>${r.file_name}</i> failed: ${r.error}`, 'error');
+                        } else {
+                            success++;
+                            log(`File <i>${r.file_name}</i> sorted to <span class="category-badge">${r.category}</span>`, 'success');
+                        }
+                        results.push({
+                            file_name: r.file_name,
+                            original_path: r.original_path || r.file_name,
+                            destination_folder: r.destination_folder || `${r.category}/`,
+                            category: r.category,
+                            pdf_type: r.pdf_type,
+                            confidence: ((r.llm_score || 0) / 10).toFixed(4),
+                            processing_time: r.processing_time || "0.0",
+                            error: r.error || ""
+                        });
+                    });
+                }
+
+                statSuccess.textContent = success;
+                statFailed.textContent = failed;
+                currentSessionResults = results;
+                
+                if (results.length > 0) {
+                    btnViewReport.disabled = false;
+                    btnDownloadReport.disabled = false;
+                }
+
+                progressPercent.textContent = `100%`;
+                progressFill.style.width = `100%`;
+                progressStatus.textContent = `Complete!`;
+                log(`Cloud classification complete! Processed: ${result.pdfs_processed} | Success: ${success} | Failed: ${failed} | Elapsed Time: ${totalElapsed}s`, 'success');
+
+            } catch (err) {
+                log(`Cloud classification error: ${err.message}`, 'error');
+                clearInterval(timerInterval);
+            } finally {
+                document.getElementById('btn-cloud-classify').disabled = false;
+            }
+        });
+
+        // ── OneDrive Mode Implementation ──────────────────────────────────
+        async function checkOneDriveStatus() {
+            try {
+                const statusText = document.getElementById('onedrive-status-text');
+                const pathDetails = document.getElementById('onedrive-path-details');
+                
+                if (!statusText) return;
+                
+                statusText.textContent = "Checking OneDrive connection...";
+                pathDetails.style.display = 'none';
+                
+                const res = await fetch('/onedrive/status');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                
+                const data = await res.json();
+                if (data.connected) {
+                    statusText.innerHTML = `🟢 Connected. Found <b>${data.pdf_count}</b> pending PDF(s).`;
+                    pathDetails.innerHTML = `<b>Root path:</b> ${data.onedrive_root}<br><b>Input folder:</b> ${data.onedrive_input}<br><b>Output folder:</b> ${data.onedrive_output}`;
+                    pathDetails.style.display = 'block';
+                    document.getElementById('onedrive-input-folder').placeholder = data.onedrive_input;
+                    document.getElementById('onedrive-output-folder').placeholder = data.onedrive_output;
+                } else {
+                    statusText.textContent = "🔴 OneDrive folder not accessible.";
+                    pathDetails.textContent = "Check if OneDrive client is running and synchronized.";
+                    pathDetails.style.display = 'block';
+                }
+            } catch (err) {
+                console.error("Error checking OneDrive status:", err);
+                const statusText = document.getElementById('onedrive-status-text');
+                if (statusText) statusText.textContent = `❌ Error: ${err.message}`;
+            }
+        }
+
+        document.getElementById('btn-onedrive-refresh').addEventListener('click', checkOneDriveStatus);
+
+        document.getElementById('btn-onedrive-classify').addEventListener('click', async () => {
+            const inputPath = document.getElementById('onedrive-input-folder').value.trim();
+            const outputPath = document.getElementById('onedrive-output-folder').value.trim();
+
+            const checkedBoxes = categoriesList.querySelectorAll('input[type="checkbox"]:checked');
+            const selectedCats = Array.from(checkedBoxes).map(cb => cb.value);
+            
+            if (selectedCats.length === 0) {
+                alert("Please select at least one active category.");
+                return;
+            }
+
+            const threshold = parseFloat(thresholdInput.value);
+            const maxPages = parseInt(maxPagesInput.value, 10);
+            const llmModel = llmModelSelect.value;
+            const copyMode = copyModeCheck.checked;
+
+            btnViewReport.disabled = true;
+            btnDownloadReport.disabled = true;
+            currentSessionResults = [];
+
+            log(`Starting OneDrive Classification...`, 'info');
+            document.getElementById('btn-onedrive-classify').disabled = true;
+            progressArea.style.display = 'flex';
+            progressPercent.textContent = `0%`;
+            progressFill.style.width = `0%`;
+            progressStatus.textContent = `Triggering OneDrive classification...`;
+
+            let timerInterval = null;
+            const startTime = performance.now();
+            timerInterval = setInterval(() => {
+                const elapsed = (performance.now() - startTime) / 1000;
+                statTime.textContent = `${elapsed.toFixed(1)}s`;
+            }, 100);
+
+            try {
+                const response = await fetch('/onedrive/classify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        onedrive_input_folder: inputPath || null,
+                        onedrive_output_folder: outputPath || null,
+                        copy_mode: copyMode,
+                        dry_run: false,
+                        pdf_max_pages: maxPages,
+                        min_score: threshold,
+                        llm_model: llmModel
+                    })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || `Server returned HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                clearInterval(timerInterval);
+                const totalElapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+                statTime.textContent = `${totalElapsed}s`;
+
+                statTotal.textContent = result.pdfs_processed || '0';
+                
+                let success = 0;
+                let failed = 0;
+                const results = [];
+
+                if (result.pipeline_results) {
+                    result.pipeline_results.forEach(r => {
+                        if (r.error) {
+                            failed++;
+                            log(`File <i>${r.file_name}</i> failed: ${r.error}`, 'error');
+                        } else {
+                            success++;
+                            log(`File <i>${r.file_name}</i> sorted to <span class="category-badge">${r.category}</span>`, 'success');
+                        }
+                        results.push({
+                            file_name: r.file_name,
+                            original_path: r.original_path || r.file_name,
+                            destination_folder: r.destination_folder || `${r.category}/`,
+                            category: r.category,
+                            pdf_type: r.pdf_type,
+                            confidence: ((r.llm_score || 0) / 10).toFixed(4),
+                            processing_time: r.processing_time || "0.0",
+                            error: r.error || ""
+                        });
+                    });
+                }
+
+                statSuccess.textContent = success;
+                statFailed.textContent = failed;
+                currentSessionResults = results;
+                
+                if (results.length > 0) {
+                    btnViewReport.disabled = false;
+                    btnDownloadReport.disabled = false;
+                }
+
+                progressPercent.textContent = `100%`;
+                progressFill.style.width = `100%`;
+                progressStatus.textContent = `Complete!`;
+                log(`OneDrive classification complete! Processed: ${result.pdfs_processed} | Success: ${success} | Failed: ${failed} | Elapsed Time: ${totalElapsed}s`, 'success');
+
+                // Auto-refresh OneDrive status to update file count
+                await checkOneDriveStatus();
+
+            } catch (err) {
+                log(`OneDrive classification error: ${err.message}`, 'error');
+                clearInterval(timerInterval);
+            } finally {
+                document.getElementById('btn-onedrive-classify').disabled = false;
+            }
+        });
+
+        // ── OneDrive Submode Switcher ──
+        let activeOneDriveSubMode = 'local';
+        
+        function switchOneDriveSubMode(submode) {
+            activeOneDriveSubMode = submode;
+            document.getElementById('btn-od-mode-local').classList.toggle('active', submode === 'local');
+            document.getElementById('btn-od-mode-cloud').classList.toggle('active', submode === 'cloud');
+            
+            document.getElementById('od-local-subpanel').style.display = submode === 'local' ? 'block' : 'none';
+            document.getElementById('od-cloud-subpanel').style.display = submode === 'cloud' ? 'block' : 'none';
+            
+            log(`Switched OneDrive sub-mode to ${submode === 'local' ? 'Local Sync' : 'Cloud Account'}.`, 'info');
+            if (submode === 'cloud') {
+                checkOneDriveOAuthSetup();
+                checkOneDriveLogin();
+            } else {
+                checkOneDriveStatus();
+            }
+        }
+
+        async function checkOneDriveOAuthSetup() {
+            try {
+                const res = await fetch('/onedrive/check-setup');
+                const data = await res.json();
+                const configured = data.oauth_configured;
+                document.getElementById('onedrive-setup-alert').style.display = configured ? 'none' : 'block';
+                document.getElementById('btn-onedrive-login').disabled = !configured;
+            } catch (err) {
+                console.error("Error checking OneDrive OAuth setup:", err);
+            }
+        }
+
+        async function checkOneDriveLogin() {
+            try {
+                const res = await fetch('/onedrive/profile');
+                const data = await res.json();
+                
+                const userStatusText = document.getElementById('od-user-status-text');
+                const userEmail = document.getElementById('od-user-email');
+                const btnLogin = document.getElementById('btn-onedrive-login');
+                const btnLogout = document.getElementById('btn-onedrive-logout');
+                const actionSection = document.getElementById('onedrive-cloud-action-section');
+                
+                if (data.authenticated) {
+                    userStatusText.textContent = data.name || "Signed in";
+                    userEmail.textContent = data.email || "";
+                    userEmail.style.display = 'block';
+                    btnLogin.style.display = 'none';
+                    btnLogout.style.display = 'block';
+                    actionSection.style.display = 'block';
+                } else {
+                    userStatusText.textContent = "Not signed in to OneDrive Cloud";
+                    userEmail.style.display = 'none';
+                    btnLogin.style.display = 'block';
+                    btnLogout.style.display = 'none';
+                    actionSection.style.display = 'none';
+                }
+            } catch (err) {
+                console.error("Error checking OneDrive login status:", err);
+            }
+        }
+
+        // Login / Logout buttons
+        document.getElementById('btn-onedrive-login').addEventListener('click', () => {
+            window.location.href = '/onedrive/login';
+        });
+
+        document.getElementById('btn-onedrive-logout').addEventListener('click', async () => {
+            window.location.href = '/onedrive/logout';
+        });
+
+        // Run Cloud OneDrive Classification
+        document.getElementById('btn-onedrive-cloud-classify').addEventListener('click', async () => {
+            const inputId = document.getElementById('onedrive-cloud-input-id').value;
+            const outputId = document.getElementById('onedrive-cloud-output-id').value;
+            const inputName = document.getElementById('onedrive-cloud-input-name').value;
+            const outputName = document.getElementById('onedrive-cloud-output-name').value;
+
+            if (!inputId || !outputId) {
+                alert("Please select both input and output folders in OneDrive Cloud.");
+                return;
+            }
+
+            const checkedBoxes = categoriesList.querySelectorAll('input[type="checkbox"]:checked');
+            const selectedCats = Array.from(checkedBoxes).map(cb => cb.value);
+            
+            if (selectedCats.length === 0) {
+                alert("Please select at least one active category.");
+                return;
+            }
+
+            const threshold = parseFloat(thresholdInput.value);
+            const maxPages = parseInt(maxPagesInput.value, 10);
+            const llmModel = llmModelSelect.value;
+            const copyMode = copyModeCheck.checked;
+            const limitVal = parseInt(maxFilesInput.value, 10);
+            const maxFiles = isNaN(limitVal) ? null : limitVal;
+
+            btnViewReport.disabled = true;
+            btnDownloadReport.disabled = true;
+            currentSessionResults = [];
+
+            log(`Starting OneDrive Cloud Classification: <b>${inputName}</b> ➔ <b>${outputName}</b>`, 'info');
+            document.getElementById('btn-onedrive-cloud-classify').disabled = true;
+            progressArea.style.display = 'flex';
+            progressPercent.textContent = `0%`;
+            progressFill.style.width = `0%`;
+            progressStatus.textContent = `Triggering OneDrive Cloud classification...`;
+
+            let timerInterval = null;
+            const startTime = performance.now();
+            timerInterval = setInterval(() => {
+                const elapsed = (performance.now() - startTime) / 1000;
+                statTime.textContent = `${elapsed.toFixed(1)}s`;
+            }, 100);
+
+            try {
+                const response = await fetch('/onedrive/drive/classify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        onedrive_input_folder_id: inputId,
+                        onedrive_output_folder_id: outputId,
+                        copy_mode: copyMode,
+                        dry_run: false,
+                        pdf_max_pages: maxPages,
+                        min_score: threshold,
+                        llm_model: llmModel,
+                        categories: selectedCats,
+                        max_files: maxFiles
+                    })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || `Server returned HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                clearInterval(timerInterval);
+                const totalElapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+                statTime.textContent = `${totalElapsed}s`;
+
+                statTotal.textContent = result.pdfs_processed || '0';
+                
+                let success = 0;
+                let failed = 0;
+                const results = [];
+
+                if (result.pipeline_results) {
+                    result.pipeline_results.forEach(r => {
+                        if (r.error) {
+                            failed++;
+                            log(`File <i>${r.file_name}</i> failed: ${r.error}`, 'error');
+                        } else {
+                            success++;
+                            log(`File <i>${r.file_name}</i> sorted to <span class="category-badge">${r.category}</span>`, 'success');
+                        }
+                        results.push({
+                            file_name: r.file_name,
+                            original_path: r.original_path || r.file_name,
+                            destination_folder: r.destination_folder || `${r.category}/`,
+                            category: r.category,
+                            pdf_type: r.pdf_type,
+                            confidence: ((r.llm_score || 0) / 10).toFixed(4),
+                            processing_time: r.processing_time || "0.0",
+                            error: r.error || ""
+                        });
+                    });
+                }
+
+                statSuccess.textContent = success;
+                statFailed.textContent = failed;
+                currentSessionResults = results;
+                
+                if (results.length > 0) {
+                    btnViewReport.disabled = false;
+                    btnDownloadReport.disabled = false;
+                }
+
+                progressPercent.textContent = `100%`;
+                progressFill.style.width = `100%`;
+                progressStatus.textContent = `Complete!`;
+                log(`OneDrive Cloud classification complete! Processed: ${result.pdfs_processed} | Success: ${success} | Failed: ${failed} | Elapsed Time: ${totalElapsed}s`, 'success');
+
+            } catch (err) {
+                log(`OneDrive Cloud classification error: ${err.message}`, 'error');
+                clearInterval(timerInterval);
+            } finally {
+                document.getElementById('btn-onedrive-cloud-classify').disabled = false;
+            }
+        });
+
+        // Initialize OneDrive SubMode and Status
+        window.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                switchOneDriveSubMode('local');
+            }, 1500); // Wait for config to load first
+        });
+    </script>
+
+</body>
+</html>
