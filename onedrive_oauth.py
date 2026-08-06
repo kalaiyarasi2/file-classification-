@@ -22,11 +22,14 @@ from file_classifier import run_pipeline_full, load_categories_from_env, get_log
 router = APIRouter()
 logger = get_logger("file_classifier.onedrive_oauth")
 
-# Scopes needed for accessing files and folders in OneDrive and user profile
+# Scopes needed for accessing files, folders, and SharePoint sites.
+# NOTE: Do NOT include 'offline_access', 'openid', or 'profile' here —
+# MSAL reserves and adds those automatically. Including them causes a ValueError.
 SCOPES = [
     "Files.ReadWrite",
     "Files.ReadWrite.All",
-    "User.Read"
+    "Sites.ReadWrite.All",
+    "User.Read",
 ]
 
 # --------------------------------------------------------------------------
@@ -120,7 +123,7 @@ def get_valid_token(request: Request) -> Optional[str]:
                 logger.info("OneDrive access token expired. Attempting to refresh...")
                 client_id = _read_env_key("MICROSOFT_CLIENT_ID")
                 client_secret = _read_env_key("MICROSOFT_CLIENT_SECRET")
-                tenant_id = _read_env_key("MICROSOFT_TENANT_ID", "common")
+                tenant_id = _read_env_key("MICROSOFT_TENANT_ID", "4858c3ed-d305-48b4-80e0-0bcdbf8ff3ae")
                 authority = f"https://login.microsoftonline.com/{tenant_id}"
 
                 app = msal.ConfidentialClientApplication(
@@ -171,7 +174,7 @@ def onedrive_login(request: Request):
 
     client_id = _read_env_key("MICROSOFT_CLIENT_ID")
     client_secret = _read_env_key("MICROSOFT_CLIENT_SECRET")
-    tenant_id = _read_env_key("MICROSOFT_TENANT_ID", "common")
+    tenant_id = _read_env_key("MICROSOFT_TENANT_ID", "4858c3ed-d305-48b4-80e0-0bcdbf8ff3ae")
     authority = f"https://login.microsoftonline.com/{tenant_id}"
     callback_url = get_onedrive_redirect_uri(request)
 
@@ -238,7 +241,7 @@ def onedrive_callback(request: Request, code: str = None, state: str = None, err
 
     client_id = _read_env_key("MICROSOFT_CLIENT_ID")
     client_secret = _read_env_key("MICROSOFT_CLIENT_SECRET")
-    tenant_id = _read_env_key("MICROSOFT_TENANT_ID", "common")
+    tenant_id = _read_env_key("MICROSOFT_TENANT_ID", "4858c3ed-d305-48b4-80e0-0bcdbf8ff3ae")
     authority = f"https://login.microsoftonline.com/{tenant_id}"
     callback_url = get_onedrive_redirect_uri(request)
 
@@ -267,6 +270,25 @@ def onedrive_callback(request: Request, code: str = None, state: str = None, err
         session_id = uuid.uuid4().hex
         _od_save_session(session_id, creds_data)
         logger.info("OneDrive OAuth: credentials saved to server-side session (id=%s..)", session_id[:8])
+
+        # ── Inject the Graph access_token into the SharePoint agent ──────────
+        # The token has Sites.ReadWrite.All + Files.ReadWrite.All scopes, which
+        # gives delegated access to private SharePoint group sites the user can see.
+        try:
+            import sys as _sys
+            from pathlib import Path as _Path
+            _ws = _Path(__file__).parent.parent.resolve()
+            _sp_path = str(_ws / "SharePoint_Agent")
+            if _sp_path not in _sys.path:
+                _sys.path.insert(0, str(_ws))
+            from SharePoint_Agent.sharepoint_agent_module import sharepoint_agent
+            sharepoint_agent.set_delegated_token(
+                result["access_token"],
+                expires_in=int(result.get("expires_in", 3600))
+            )
+            logger.info("SharePoint agent updated with delegated token from OneDrive OAuth login.")
+        except Exception as _sp_err:
+            logger.warning("Could not inject token into SharePoint agent: %s", _sp_err)
 
         # Success! Redirect back to the dashboard UI
         response = RedirectResponse(url=redirect_target)

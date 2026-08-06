@@ -285,6 +285,28 @@ class DriveClassifierConnector:
         elapsed = round(time.time() - start, 2)
         _log.info("Done in %.2fs. Files written to Drive: %d", elapsed, len(copied_to_drive))
 
+        # Log results to universal_history in converter.db
+        try:
+            from pathlib import Path
+            import sys
+            workspace_root = str(Path(__file__).resolve().parent.parent)
+            if workspace_root not in sys.path:
+                sys.path.append(workspace_root)
+            from database import poc_db
+            
+            for res in (pipeline_results if isinstance(pipeline_results, list) else []):
+                status_str = "SUCCESS" if not res.get("error") else "FAILED"
+                detail_str = f"Category: {res.get('category')} (score: {res.get('llm_score')}) | PDF: {res.get('pdf_type')}" if status_str == "SUCCESS" else res.get("error")
+                poc_db.log_universal(
+                    module="GOOGLE_DRIVE",
+                    action="Google Drive Document Processing",
+                    file_name=res.get("file_name"),
+                    status=status_str,
+                    details=detail_str
+                )
+        except Exception as db_err:
+            _log.warning("Failed to log Google Drive run to universal_history: %s", db_err)
+
         return {
             "success":          True,
             "drive_input":      str(self.drive_input),

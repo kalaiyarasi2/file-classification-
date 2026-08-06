@@ -136,7 +136,7 @@ export const api = {
 
   classifyPdf: (file: File, opts: {
     max_pages?: number; llm_model?: string; threshold?: number;
-    force_ocr?: boolean; categories?: string;
+    force_ocr?: boolean; categories?: string; run_id?: string;
   } = {}) => {
     const fd = new FormData(); fd.append("file", file);
     return request<ClassifyResponse>("/classify/pdf", { method: "POST", body: fd }, opts);
@@ -215,4 +215,63 @@ export const api = {
       subdirectories: { name: string; path: string }[];
       drives: string[];
     }>("/list-directories", undefined, path ? { path } : undefined),
+
+  automationStatus: () =>
+    request<{
+      outlook_connected: boolean;
+      gmail_connected: boolean;
+      running: boolean;
+      active_provider: "outlook" | "gmail" | null;
+      pid: number | null;
+      started_at: number | null;
+    }>("/api/automation/status"),
+
+  automationStart: (provider: "outlook" | "gmail") =>
+    request<{ status: string; pid: number; provider: string }>("/api/automation/start", {
+      method: "POST",
+      body: JSON.stringify({ provider }),
+    }),
+
+  automationStop: () =>
+    request<{ status: string }>("/api/automation/stop", { method: "POST" }),
+
+  automationLogs: (lines: number = 50) =>
+    request<{ logs: string[] }>("/api/automation/logs", undefined, { lines }),
+
+  monitorFinish: (body: {
+    run_id: string;
+    status?: string;
+    attachments?: number;
+    files_classified?: number;
+    errors?: number;
+  }) => request<{ status: string }>("/api/monitor/finish", { method: "POST", body: JSON.stringify(body) }),
+
+  convertFile: (file: File, source_format: string, target_format: string, user_id?: number) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("source_format", source_format.toLowerCase());
+    fd.append("target_format", target_format.toLowerCase());
+    if (user_id !== undefined) fd.append("user_id", String(user_id));
+    return fetch(`${getBackendUrl()}/api/convert`, {
+      method: "POST",
+      body: fd,
+      credentials: "include",
+    });
+  },
+
+  getConversionHistory: (limit: number = 100) =>
+    request<ConversionHistoryRecord[]>("/api/convert/history", undefined, { limit }),
 };
+
+export interface ConversionHistoryRecord {
+  id: number;
+  source_format: string;
+  target_format: string;
+  original_file_name: string;
+  converted_file_name: string | null;
+  status: string;
+  error_message: string | null;
+  created_by: number | null;
+  created_date: string | null;
+}
+

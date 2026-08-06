@@ -55,3 +55,8 @@ requests>=2.28.0
 pytest>=8.1.0
 pytest-cov>=5.0.0
 openai>=1.0.0
+# ── File Converter integration ─────────────────────────────────────────────
+sqlalchemy
+xmltodict
+dicttoxml
+

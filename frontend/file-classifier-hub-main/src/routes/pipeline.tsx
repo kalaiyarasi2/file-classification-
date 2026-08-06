@@ -110,6 +110,11 @@ function PipelinePage() {
     setRunning(true); setResult(null); setLogs([]); setStepIdx(0);
     const log = (m: string) => setLogs((L) => [...L, `[${new Date().toLocaleTimeString()}] ${m}`]);
     log(`Starting Client-side local pipeline...`);
+    const runId = crypto.randomUUID ? crypto.randomUUID() : "client-" + Math.random().toString(36).substring(2, 15);
+
+    let files: any[] = [];
+    let successful = 0;
+    let failed = 0;
 
     try {
       log("Requesting permission to access local directory...");
@@ -120,7 +125,6 @@ function PipelinePage() {
       }
 
       log("Scanning input directory for PDF files...");
-      const files: any[] = [];
       for await (const entry of (clientInputHandle as any).values()) {
         if (entry.kind === "file" && entry.name.toLowerCase().endsWith(".pdf")) {
           files.push(entry);
@@ -135,8 +139,6 @@ function PipelinePage() {
         return;
       }
 
-      let successful = 0;
-      let failed = 0;
       const categoriesFound: Record<string, number> = {};
       const resultsList = [];
       let activeFileIdx = 0;
@@ -151,7 +153,8 @@ function PipelinePage() {
           const classification = await api.classifyPdf(fileObj, {
             max_pages: maxPages,
             llm_model: model,
-            threshold: minScore
+            threshold: minScore,
+            run_id: runId
           });
 
           if (classification.error) {
@@ -233,10 +236,34 @@ function PipelinePage() {
       setStepIdx(STEPS.length - 1);
       toast.success("Local client pipeline complete!");
 
+      try {
+        await api.monitorFinish({
+          run_id: runId,
+          status: "completed",
+          attachments: files.length,
+          files_classified: successful,
+          errors: failed
+        });
+      } catch (mdbErr) {
+        console.warn("Failed to finalize monitor run:", mdbErr);
+      }
+
     } catch (e: any) {
       log(`Pipeline execution failed: ${e.message}`);
       addLog("ERROR", "pipeline", e.message);
       toast.error(e.message);
+
+      try {
+        await api.monitorFinish({
+          run_id: runId,
+          status: "error",
+          attachments: files ? files.length : 0,
+          files_classified: typeof successful !== "undefined" ? successful : 0,
+          errors: typeof failed !== "undefined" ? failed : 0
+        });
+      } catch (mdbErr) {
+        console.warn("Failed to finalize monitor run on error:", mdbErr);
+      }
     } finally {
       setRunning(false);
     }

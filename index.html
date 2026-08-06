@@ -696,6 +696,19 @@
             border-color: var(--primary);
             font-weight: 500;
         }
+
+        #panel-activity .report-table tr:hover {
+            background-color: rgba(99, 102, 241, 0.06);
+        }
+
+        #activity-logs-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #activity-logs-container::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
@@ -782,6 +795,7 @@
                 <div class="mode-tab active" id="tab-local" onclick="switchMode('local')">📁 Local Folder</div>
                 <div class="mode-tab" id="tab-cloud" onclick="switchMode('cloud')">☁️ Google Drive (Cloud)</div>
                 <div class="mode-tab" id="tab-onedrive" onclick="switchMode('onedrive')">☁️ OneDrive</div>
+                <div class="mode-tab" id="tab-activity" onclick="switchMode('activity')">📋 Activity Logs</div>
             </div>
 
             <!-- Local Workspace Panel -->
@@ -914,6 +928,54 @@
                         
                         <button id="btn-onedrive-cloud-classify" style="background: linear-gradient(135deg, var(--success), var(--primary)); box-shadow: 0 4px 15px -3px var(--success-glow); margin-top: 8px; width: 100%;">🚀 Run OneDrive Cloud Classification</button>
                     </div>
+                </div>
+            </div>
+
+            <!-- Activity Logs Panel -->
+            <div id="panel-activity" style="display: none;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <select id="activity-filter-module" style="width: 160px; font-size: 13px; padding: 8px 10px;" onchange="loadActivityLogs()">
+                            <option value="">All Modules</option>
+                            <option value="OUTLOOK">Outlook</option>
+                            <option value="GMAIL">Gmail</option>
+                            <option value="EMAIL_AUTOMATION">Automation</option>
+                            <option value="ONEDRIVE">OneDrive</option>
+                            <option value="GOOGLE_DRIVE">Google Drive</option>
+                            <option value="PARITY_SETUP">Parity Setup</option>
+                            <option value="RENEWAL_PROCESS">Renewal</option>
+                            <option value="RESOURCING_EDGE">Resourcing Edge</option>
+                            <option value="RPVE">RPVE</option>
+                            <option value="GPU_SERVER">GPU Server</option>
+                        </select>
+                        <select id="activity-filter-status" style="width: 140px; font-size: 13px; padding: 8px 10px;" onchange="loadActivityLogs()">
+                            <option value="">All Status</option>
+                            <option value="SUCCESS">Success</option>
+                            <option value="FAILED">Failed</option>
+                            <option value="SKIPPED">Skipped</option>
+                            <option value="RUNNING">Running</option>
+                            <option value="STOPPED">Stopped</option>
+                        </select>
+                    </div>
+                    <button class="btn-secondary" style="padding: 8px 16px; font-size: 13px; max-width: 120px; margin: 0;" onclick="loadActivityLogs()">🔄 Refresh</button>
+                </div>
+                <div id="activity-logs-container" style="background: #05070c; border: 1px solid var(--border); border-radius: 10px; overflow-y: auto; max-height: 480px;">
+                    <table class="report-table" style="font-size: 12.5px;">
+                        <thead>
+                            <tr>
+                                <th style="width: 50px;">ID</th>
+                                <th style="width: 100px;">Time</th>
+                                <th style="width: 80px;">Module</th>
+                                <th style="width: 180px;">Action</th>
+                                <th>File Name</th>
+                                <th style="width: 80px;">Status</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activity-logs-body">
+                            <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 40px;">Click Refresh or switch tabs to load logs...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -1593,14 +1655,76 @@
             document.getElementById('tab-local').classList.toggle('active', mode === 'local');
             document.getElementById('tab-cloud').classList.toggle('active', mode === 'cloud');
             document.getElementById('tab-onedrive').classList.toggle('active', mode === 'onedrive');
+            document.getElementById('tab-activity').classList.toggle('active', mode === 'activity');
             
             document.getElementById('panel-local').style.display = mode === 'local' ? 'block' : 'none';
             document.getElementById('panel-cloud').style.display = mode === 'cloud' ? 'block' : 'none';
             document.getElementById('panel-onedrive').style.display = mode === 'onedrive' ? 'block' : 'none';
+            document.getElementById('panel-activity').style.display = mode === 'activity' ? 'block' : 'none';
             
-            log(`Switched to ${mode === 'local' ? 'Local Folder' : mode === 'cloud' ? 'Google Drive (Cloud)' : 'OneDrive'} mode.`, 'info');
+            if (mode === 'activity') {
+                loadActivityLogs();
+            } else {
+                log(`Switched to ${mode === 'local' ? 'Local Folder' : mode === 'cloud' ? 'Google Drive (Cloud)' : 'OneDrive'} mode.`, 'info');
+            }
             if (mode === 'onedrive') {
                 checkOneDriveStatus();
+            }
+        }
+
+        async function loadActivityLogs() {
+            const tbody = document.getElementById('activity-logs-body');
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">Loading...</td></tr>';
+            
+            const modFilter = document.getElementById('activity-filter-module').value;
+            const statusFilter = document.getElementById('activity-filter-status').value;
+            
+            let url = '/api/universal-logs?limit=200';
+            if (modFilter) url += '&module=' + encodeURIComponent(modFilter);
+            if (statusFilter) url += '&status=' + encodeURIComponent(statusFilter);
+            
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                const logs = data.logs || [];
+                
+                if (logs.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 40px;">No logs found.</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = '';
+                logs.forEach(row => {
+                    const tr = document.createElement('tr');
+                    const statusColor = {
+                        'SUCCESS': 'var(--success)', 'COMPLETED': 'var(--success)',
+                        'FAILED': 'var(--error)', 'ERROR': 'var(--error)',
+                        'SKIPPED': 'var(--warning)',
+                        'RUNNING': '#38bdf8', 'STOPPED': 'var(--text-muted)'
+                    }[row.status] || 'var(--text-muted)';
+                    
+                    const moduleColor = {
+                        'OUTLOOK': '#38bdf8', 'GMAIL': '#fb7185',
+                        'EMAIL_AUTOMATION': 'var(--accent)',
+                        'ONEDRIVE': '#0078d4', 'GOOGLE_DRIVE': 'var(--success)',
+                        'GPU_SERVER': 'var(--warning)'
+                    }[row.module] || 'var(--text-muted)';
+
+                    const timeStr = row.created_date ? new Date(row.created_date + 'Z').toLocaleString() : '-';
+                    
+                    tr.innerHTML = `
+                        <td style="color: var(--text-muted); font-family: monospace;">${row.id}</td>
+                        <td style="color: var(--text-muted); font-size: 11.5px; white-space: nowrap;">${timeStr}</td>
+                        <td><span style="color: ${moduleColor}; font-weight: 600; font-size: 12px;">${escapeHtml(row.module || '')}</span></td>
+                        <td style="font-size: 12px;">${escapeHtml(row.action || '')}</td>
+                        <td style="font-family: monospace; font-size: 12px; color: var(--text-main); max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(row.file_name || '')}">${escapeHtml(row.file_name || '-')}</td>
+                        <td><span style="color: ${statusColor}; font-weight: 600; font-size: 12px;">${escapeHtml(row.status || '')}</span></td>
+                        <td style="font-size: 11.5px; color: var(--text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(row.details || '')}">${escapeHtml(row.details || '-')}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--error); padding: 40px;">Failed to load logs: ' + err.message + '</td></tr>';
             }
         }
 
