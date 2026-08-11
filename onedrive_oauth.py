@@ -64,6 +64,12 @@ def get_onedrive_redirect_uri(request: Request) -> str:
     url = str(request.url_for("onedrive_callback"))
     if request.headers.get("x-forwarded-proto") == "https":
         url = url.replace("http://", "https://")
+        
+    # IIS URL Rewrite drops the original host and sets it to 127.0.0.1:9000. 
+    # Force the production domain if we detect this internal proxy address.
+    if "127.0.0.1:9000" in url or "localhost:9000" in url:
+        return "https://app.drive360.ai/onedrive/callback"
+        
     # Normalize 127.0.0.1 → localhost to match Azure app registration and avoid cookie domain issues
     url = url.replace("://127.0.0.1", "://localhost")
     return url
@@ -72,7 +78,8 @@ def get_onedrive_redirect_uri(request: Request) -> str:
 # --------------------------------------------------------------------------
 # Server-side session storage (avoids 4KB cookie size limit)
 # --------------------------------------------------------------------------
-SESSION_DIR = Path(__file__).parent / ".sessions"
+WORKSPACE_DIR = Path(__file__).parent.parent
+SESSION_DIR = WORKSPACE_DIR / ".sessions"
 SESSION_DIR.mkdir(exist_ok=True)
 
 def _od_session_path(session_id: str) -> Path:
@@ -203,13 +210,27 @@ def onedrive_login(request: Request):
         state=state_param
     )
 
-    response = RedirectResponse(url=authorization_url)
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta http-equiv="refresh" content="0; url={authorization_url}">
+    </head>
+    <body>
+        <script>window.location.href = "{authorization_url}";</script>
+        Redirecting to Microsoft...
+    </body>
+    </html>
+    """
+    response = HTMLResponse(content=html_content)
     response.set_cookie(
         key="onedrive_oauth_state",
         value=csrf_token,
         httponly=True,
         max_age=600,
-        samesite="lax"
+        samesite="lax",
+        secure=True,
+        path="/"
     )
     return response
 
@@ -269,7 +290,19 @@ def onedrive_callback(request: Request, code: str = None, state: str = None, err
         logger.info("OneDrive OAuth: credentials saved to server-side session (id=%s..)", session_id[:8])
 
         # Success! Redirect back to the dashboard UI
-        response = RedirectResponse(url=redirect_target)
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta http-equiv="refresh" content="0; url={redirect_target}">
+        </head>
+        <body>
+            <script>window.location.href = "{redirect_target}";</script>
+            Redirecting...
+        </body>
+        </html>
+        """
+        response = HTMLResponse(content=html_content)
         
         # Set small session ID cookie (well under 4KB limit)
         response.set_cookie(
@@ -277,11 +310,13 @@ def onedrive_callback(request: Request, code: str = None, state: str = None, err
             value=session_id,
             httponly=True,
             max_age=3600 * 24 * 7, # valid for 7 days
-            samesite="lax"
+            samesite="lax",
+            secure=True,
+            path="/"
         )
         # Clear OAuth state cookie and old credential cookie
-        response.delete_cookie("onedrive_oauth_state")
-        response.delete_cookie("onedrive_credentials")  # clean up old cookie if present
+        response.delete_cookie("onedrive_oauth_state", path="/")
+        response.delete_cookie("onedrive_credentials", path="/")  # clean up old cookie if present
         return response
     except Exception as e:
         logger.error("OneDrive OAuth flow token fetching failed: %s", e, exc_info=True)
@@ -295,8 +330,8 @@ def onedrive_logout(request: Request):
     if session_id:
         _od_delete_session(session_id)
     response = RedirectResponse(url="/")
-    response.delete_cookie("onedrive_session_id")
-    response.delete_cookie("onedrive_credentials")  # clean up old cookie if present
+    response.delete_cookie("onedrive_session_id", path="/")
+    response.delete_cookie("onedrive_credentials", path="/")  # clean up old cookie if present
     return response
 
 
@@ -327,7 +362,7 @@ def onedrive_profile(request: Request):
         if session_id:
             _od_delete_session(session_id)
         response = JSONResponse(content={"authenticated": False, "email": None, "name": None, "error": str(e)})
-        response.delete_cookie("onedrive_session_id")
+        response.delete_cookie("onedrive_session_id", path="/")
         return response
 
 
@@ -396,7 +431,7 @@ class OneDriveDriveClassifyRequest(BaseModel):
     llm_model: Optional[str] = Field("gpt-4o")
     categories: Optional[List[str]] = Field(None, description="Active categories to classify against. None = use all configured categories")
     max_files: Optional[int] = Field(None, description="Limit on number of files to process")
-
+    poc_engine: Optional[str] = Field(None, description="The selected POC engine (e.g. AUTO, INSURANCE, etc.)")
 
 @router.post("/onedrive/drive/classify")
 async def cloud_onedrive_classify(request: Request, body: OneDriveDriveClassifyRequest):
@@ -482,7 +517,24 @@ async def cloud_onedrive_classify(request: Request, body: OneDriveDriveClassifyR
         # Filter categories to only keep the active ones checked in the frontend UI
         if body.categories is not None:
             categories = {k: v for k, v in categories.items() if k in body.categories}
-            logger.info("Active categories filtered to: %s", list(categories.keys()))
+        elif body.poc_engine and body.poc_engine != "AUTO":
+            engine_map = {
+                "INSURANCE": ["INSURANCE_CLAIMS"],
+                "WORK_COMP": ["WORK_COMPENSATION"],
+                "BANK_STATEMENT": ["BANK_STATEMENT"],
+                "VENDOR_INVOICE": ["VENDOR_INVOICE"],
+                "PAYROLL": ["PAYROLL"],
+                "SBC": ["PARITY_SETUP"],
+                "RENEWAL": ["RENEWAL_PROCESS"],
+                "RE": ["RESOURCING_EDGE"],
+                "RPVE": ["RPVE"],
+                "INVOICE": ["INVOICE"]
+            }
+            target_cats = engine_map.get(body.poc_engine)
+            if target_cats:
+                categories = {k: v for k, v in categories.items() if k in target_cats}
+
+        logger.info("Active categories filtered to: %s", list(categories.keys()))
 
         # 5. Run the Local Classifier Pipeline
         model = body.llm_model
@@ -500,6 +552,92 @@ async def cloud_onedrive_classify(request: Request, body: OneDriveDriveClassifyR
             copy_mode=True,  # Always copy locally inside server
             dry_run=body.dry_run
         )
+
+
+        if body.poc_engine == "FULL_PIPELINE" and not body.dry_run:
+            import httpx
+            import asyncio
+            import json
+            
+            ENGINE_MAP = {
+                "INVOICE": "/api/gpu/api/extract",
+                "VENDOR_INVOICE": "/api/gpu/api/extract",
+                "PAYROLL": "/api/payroll/process-pdf",
+                "PARITY_SETUP": "/api/parity/api/extract",
+                "RESOURCING_EDGE": "/api/resourcing/api/process-pdf",
+                "WORK_COMPENSATION": "/api/gpu/api/extract",
+                "BANK_STATEMENT": "/api/gpu/api/extract",
+                "RPVE": "/api/rpve/api/extract",
+                "RENEWAL_PROCESS": "/api/renewal/api/process",
+                "INSURANCE_CLAIMS": "/api/gpu/api/extract"
+            }
+            
+            async def process_file(result_entry):
+                cat = result_entry.get("category", "")
+                if cat in ENGINE_MAP:
+                    endpoint = f"http://127.0.0.1:9000{ENGINE_MAP[cat]}"
+                    file_path = result_entry.get("destination_folder")
+                    if file_path and os.path.exists(file_path):
+                        try:
+                            logger.info(f"FULL_PIPELINE routing {file_path} to {endpoint}")
+                            async with httpx.AsyncClient(timeout=300.0) as client:
+                                with open(file_path, "rb") as f:
+                                    client_files = {"file": (os.path.basename(file_path), f, "application/pdf")}
+                                    resp = await client.post(endpoint, files=client_files)
+                                    resp.raise_for_status()
+                                    
+                                    json_data = resp.json()
+                                    
+                                    # Parse URLs
+                                    excel_url = None
+                                    json_url = None
+                                    if isinstance(json_data, dict) and "results" in json_data and isinstance(json_data["results"], list):
+                                        if len(json_data["results"]) > 0:
+                                            first_result = json_data["results"][0]
+                                            if isinstance(first_result, dict):
+                                                excel_url = first_result.get("excel_url")
+                                                json_url = first_result.get("json_url")
+                                    elif isinstance(json_data, dict):
+                                        excel_url = json_data.get("excel") or json_data.get("excel_url")
+                                        json_url = json_data.get("json") or json_data.get("json_url")
+                                    
+                                    base, _ = os.path.splitext(file_path)
+                                    
+                                    if excel_url or json_url:
+                                        if excel_url:
+                                            if not excel_url.startswith("http"): excel_url = f"http://127.0.0.1:9000{excel_url}"
+                                            try:
+                                                ex_resp = await client.get(excel_url)
+                                                ex_resp.raise_for_status()
+                                                with open(base + "_extracted.xlsx", "wb") as f_ex:
+                                                    f_ex.write(ex_resp.content)
+                                            except Exception as ex_e:
+                                                logger.error(f"Failed to download {excel_url}: {ex_e}")
+                                        if json_url:
+                                            if not json_url.startswith("http"): json_url = f"http://127.0.0.1:9000{json_url}"
+                                            try:
+                                                js_resp = await client.get(json_url)
+                                                js_resp.raise_for_status()
+                                                with open(base + "_extracted.json", "wb") as f_js:
+                                                    f_js.write(js_resp.content)
+                                            except Exception as js_e:
+                                                logger.error(f"Failed to download {json_url}: {js_e}")
+                                    else:
+                                        json_path = base + "_extraction.json"
+                                        with open(json_path, "w") as jf:
+                                            import json
+                                            json.dump(json_data, jf, indent=2)
+
+                                    result_entry["extraction_result"] = "Success"
+                        except Exception as e:
+                            logger.error(f"Error processing {file_path} in FULL_PIPELINE: {e}")
+                            result_entry["extraction_result"] = f"Error: {e}"
+
+            async def run_routing():
+                tasks = [process_file(r) for r in pipeline_results if r.get("category")]
+                await asyncio.gather(*tasks)
+            
+            await run_routing()
 
         # 6. Upload categorized outputs back to OneDrive (if not dry_run)
         uploaded_files = []
@@ -569,26 +707,61 @@ async def cloud_onedrive_classify(request: Request, body: OneDriveDriveClassifyR
                         continue
 
                 # Upload each PDF in this category
-                for pdf_file in cat_folder.glob("*.pdf"):
-                    logger.info("Uploading %s to OneDrive category %s", pdf_file.name, cat_name)
-                    upload_url = f"https://graph.microsoft.com/v1.0/me/drive/items/{cat_folder_id}:/{pdf_file.name}:/content"
-                    pdf_data = pdf_file.read_bytes()
-                    
-                    upload_res = requests.put(
-                        upload_url,
-                        headers={
-                            "Authorization": f"Bearer {token}",
-                            "Content-Type": "application/pdf"
-                        },
-                        data=pdf_data
-                    )
-                    
-                    if upload_res.status_code in (200, 201):
-                        uploaded_files.append({
-                            "file_name": pdf_file.name,
-                            "category": cat_name,
-                            "destination": f"sorted/{cat_name}/{pdf_file.name}"
-                        })
+                for item in cat_folder.iterdir():
+                      if item.name.startswith("."): continue
+                      
+                      if item.is_dir():
+                          bundle_name = item.name
+                          folder_payload = {
+                              "name": bundle_name,
+                              "folder": {},
+                              "@microsoft.graph.conflictBehavior": "replace"
+                          }
+                          create_url = f"https://graph.microsoft.com/v1.0/me/drive/items/{cat_folder_id}/children"
+                          headers_create = {
+                              "Authorization": f"Bearer {token}",
+                              "Content-Type": "application/json"
+                          }
+                          async with httpx.AsyncClient() as client:
+                              resp = await client.post(create_url, headers=headers_create, json=folder_payload)
+                              resp.raise_for_status()
+                              bundle_id = resp.json()["id"]
+                          
+                          for f in item.iterdir():
+                              if not f.is_file() or f.name.startswith("."): continue
+                              logger.info("Uploading %s to OneDrive bundle %s", f.name, bundle_name)
+                              upload_url = f"https://graph.microsoft.com/v1.0/me/drive/items/{bundle_id}:/{f.name}:/content"
+                              f_data = f.read_bytes()
+                              headers_up = {
+                                  "Authorization": f"Bearer {token}",
+                                  "Content-Type": "application/json" if f.name.endswith(".json") else ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if f.name.endswith(".xlsx") else "application/pdf")
+                              }
+                              async with httpx.AsyncClient() as client:
+                                  resp = await client.put(upload_url, headers=headers_up, content=f_data)
+                                  resp.raise_for_status()
+                                  
+                              uploaded_files.append({
+                                  "file_name": f.name,
+                                  "category": cat_name,
+                                  "destination": f"sorted/{cat_name}/{bundle_name}/{f.name}"
+                              })
+                      elif item.is_file():
+                          logger.info("Uploading %s to OneDrive category %s", item.name, cat_name)
+                          upload_url = f"https://graph.microsoft.com/v1.0/me/drive/items/{cat_folder_id}:/{item.name}:/content"
+                          item_data = item.read_bytes()
+                          headers_up = {
+                              "Authorization": f"Bearer {token}",
+                              "Content-Type": "application/json" if item.name.endswith(".json") else ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if item.name.endswith(".xlsx") else "application/pdf")
+                          }
+                          async with httpx.AsyncClient() as client:
+                              resp = await client.put(upload_url, headers=headers_up, content=item_data)
+                              resp.raise_for_status()
+                          
+                          uploaded_files.append({
+                              "file_name": item.name,
+                              "category": cat_name,
+                              "destination": f"sorted/{cat_name}/{item.name}"
+                          })
                     else:
                         logger.error("Failed to upload %s to OneDrive: %s", pdf_file.name, upload_res.text)
 

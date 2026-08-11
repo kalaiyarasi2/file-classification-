@@ -55,7 +55,7 @@ class FileOrganizer:
             The final destination path (even in dry-run mode the *intended*
             path is returned so the report can record it).
         """
-        dest_dir = self.output_folder / category
+        dest_dir = self.output_folder / category / f"{source.stem} - {category}"
         dest_path = self._resolve_destination(dest_dir, source.name)
 
         action = "copy" if self.copy_mode else "move"

@@ -22,7 +22,7 @@ from typing import Annotated, Optional
 
 from fastapi import (
     FastAPI, File, Form, HTTPException, Query,
-    UploadFile, BackgroundTasks, status
+    UploadFile, BackgroundTasks, status, Request
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
@@ -1288,6 +1288,160 @@ def onedrive_classify(body: OneDriveClassifyRequest):
         logger.error("onedrive_classify error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SECTION 11 - BACKGROUND AUTOMATION PIPELINE
+# ══════════════════════════════════════════════════════════════════════════════
+
+import subprocess
+import json
+import sys
+from onedrive_oauth import get_valid_token as od_get_token
+from google_oauth import get_credentials_from_cookie as google_get_creds
+
+STATE_FILE = Path(__file__).parent / ".sessions" / "pipeline_process.json"
+
+def is_pid_running(pid: int) -> bool:
+    try:
+        proc = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+            capture_output=True,
+            text=True,
+            check=True,
+            creationflags=0x08000000
+        )
+        return str(pid) in proc.stdout
+    except Exception:
+        return False
+
+def stop_pid(pid: int):
+    try:
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(pid)],
+            check=True,
+            creationflags=0x08000000
+        )
+    except Exception as e:
+        logger.warning("Failed to kill process %d: %s", pid, e)
+
+@app.get("/api/automation/status", tags=["🚀 Pipeline"])
+def get_automation_status(request: Request):
+    logger.info("automation/status cookies: %s", request.cookies)
+    outlook_conn = bool(od_get_token(request))
+    gmail_conn = bool(google_get_creds(request))
+    
+    running = False
+    active_provider = None
+    pid = None
+    started_at = None
+    
+    if STATE_FILE.exists():
+        try:
+            with open(STATE_FILE) as fh:
+                data = json.load(fh)
+            pid = data.get("pid")
+            if pid and is_pid_running(pid):
+                running = True
+                active_provider = data.get("provider")
+                started_at = data.get("started_at")
+        except Exception:
+            pass
+            
+    return {
+        "outlook_connected": outlook_conn,
+        "gmail_connected": gmail_conn,
+        "running": running,
+        "active_provider": active_provider,
+        "pid": pid,
+        "started_at": started_at
+    }
+
+class AutomationStartRequest(BaseModel):
+    provider: str
+
+@app.post("/api/automation/start", tags=["🚀 Pipeline"])
+def start_automation(body: AutomationStartRequest, request: Request):
+    outlook_conn = bool(od_get_token(request))
+    gmail_conn = bool(google_get_creds(request))
+    
+    if body.provider == "outlook" and not outlook_conn:
+        raise HTTPException(status_code=400, detail="outlook_not_connected")
+    elif body.provider == "gmail" and not gmail_conn:
+        raise HTTPException(status_code=400, detail="gmail_not_connected")
+        
+    if STATE_FILE.exists():
+        try:
+            with open(STATE_FILE) as fh:
+                data = json.load(fh)
+            old_pid = data.get("pid")
+            if old_pid and is_pid_running(old_pid):
+                stop_pid(old_pid)
+        except Exception:
+            pass
+            
+    workspace_dir = Path(__file__).resolve().parent.parent
+    python_exe = sys.executable
+    start_script = workspace_dir / "start_flow.py"
+    
+    if not start_script.exists():
+        raise HTTPException(status_code=500, detail="Orchestration scripts missing in workspace.")
+        
+    try:
+        proc = subprocess.Popen(
+            [str(python_exe), str(start_script), "--provider", body.provider, "--interval", "60"],
+            cwd=str(workspace_dir),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=0x08000000 | 0x00000008
+        )
+        
+        state = {
+            "pid": proc.pid,
+            "provider": body.provider,
+            "started_at": time.time()
+        }
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(STATE_FILE, "w") as fh:
+            json.dump(state, fh)
+            
+        logger.info("Background automation started successfully for %s (PID=%d)", body.provider, proc.pid)
+        return {"status": "running", "pid": proc.pid, "provider": body.provider}
+    except Exception as exc:
+        logger.error("Failed to spawn background automation: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Spawn failed: {str(exc)}")
+
+@app.post("/api/automation/stop", tags=["🚀 Pipeline"])
+def stop_automation():
+    if STATE_FILE.exists():
+        try:
+            with open(STATE_FILE) as fh:
+                data = json.load(fh)
+            pid = data.get("pid")
+            if pid and is_pid_running(pid):
+                stop_pid(pid)
+                logger.info("Background automation process PID=%d stopped.", pid)
+        except Exception as e:
+            logger.warning("Error reading state file to stop process: %s", e)
+            
+        try:
+            STATE_FILE.unlink(missing_ok=True)
+        except Exception:
+            pass
+            
+    return {"status": "stopped"}
+
+@app.get("/api/automation/logs", tags=["🚀 Pipeline"])
+def get_automation_logs(lines: int = 50):
+    log_file = Path(__file__).resolve().parent.parent / "logs" / "document_organizer.log"
+    if not log_file.exists():
+        return {"logs": ["Log file does not exist yet."]}
+    try:
+        with open(log_file, "r", encoding="utf-8", errors="ignore") as fh:
+            content = fh.readlines()
+        last_lines = content[-lines:] if len(content) > lines else content
+        return {"logs": [line.strip() for line in last_lines]}
+    except Exception as e:
+        return {"logs": [f"Error reading logs: {str(e)}"]}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Dev entry point
