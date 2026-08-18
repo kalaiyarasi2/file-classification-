@@ -194,6 +194,19 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
 
             response_text = response.choices[0].message.content.strip()
 
+            try:
+                import sys
+                from pathlib import Path
+                workspace_root = str(Path(__file__).resolve().parent.parent)
+                if workspace_root not in sys.path:
+                    sys.path.insert(0, workspace_root)
+                from core.universal_token_monitor import track_usage
+                
+                if hasattr(response, 'usage') and response.usage:
+                    track_usage("FILE_CLASSIFICATION", self.llm_model, response.usage.prompt_tokens, response.usage.completion_tokens, "classification_llm")
+            except Exception as e:
+                logger.warning("Failed to track tokens: %s", e)
+                
             # Strip markdown fences if the LLM wraps the JSON
             response_text = re.sub(r"```[a-z]*\n?", "", response_text).strip("` \n")
 

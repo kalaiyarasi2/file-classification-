@@ -1916,6 +1916,20 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
             )
 
             response_text = response.choices[0].message.content.strip()
+            
+            try:
+                import sys
+                from pathlib import Path
+                workspace_root = str(Path(__file__).resolve().parent.parent)
+                if workspace_root not in sys.path:
+                    sys.path.insert(0, workspace_root)
+                from core.universal_token_monitor import track_usage
+                
+                if hasattr(response, 'usage') and response.usage:
+                    track_usage("FILE_CLASSIFICATION", self.llm_model, response.usage.prompt_tokens, response.usage.completion_tokens, "classification_llm")
+            except Exception as e:
+                _logger_cls.warning("Failed to track tokens: %s", e)
+                
             response_text = re.sub(r"```[a-z]*\n?", "", response_text).strip("` \n")
             result = json.loads(response_text)
 
@@ -2102,7 +2116,8 @@ class FileOrganizer:
             The final destination path (even in dry-run mode the *intended*
             path is returned so the report can record it).
         """
-        dest_dir  = self.output_folder / category
+        bundle_name = f"{source.stem} - {category}"
+        dest_dir  = self.output_folder / category / bundle_name
         dest_path = self._resolve_destination(dest_dir, source.name)
 
         action = "copy" if self.copy_mode else "move"

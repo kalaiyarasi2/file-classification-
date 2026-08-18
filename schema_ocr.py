@@ -150,6 +150,20 @@ class SchemaOCRExtractor:
                 response_format={"type": "json_object"},
                 temperature=0.0
             )
+            
+            try:
+                import sys
+                from pathlib import Path
+                workspace_root = str(Path(__file__).resolve().parent.parent)
+                if workspace_root not in sys.path:
+                    sys.path.insert(0, workspace_root)
+                from core.universal_token_monitor import track_usage
+                
+                if hasattr(response, 'usage') and response.usage:
+                    track_usage("FILE_CLASSIFICATION", "gpt-4o-mini", response.usage.prompt_tokens, response.usage.completion_tokens, "schema_ocr")
+            except Exception as e:
+                print(f"[Warning] Failed to track tokens: {e}")
+                
             data = json.loads(response.choices[0].message.content)
             print("[Rostaing OCR] Schema mapping completed successfully.")
             return data

@@ -602,22 +602,8 @@ async def cloud_drive_classify(request: Request, body: GoogleDriveClassifyReques
         if not body.dry_run:
             logger.info("Uploading categorized files back to Google Drive under parent: %s", body.drive_output_folder_id)
             
-            # Create a "sorted" folder inside the output folder in Google Drive
-            sorted_folder_meta = {
-                "name": "sorted",
-                "mimeType": "application/vnd.google-apps.folder",
-                "parents": [body.drive_output_folder_id]
-            }
-            # Check if "sorted" folder already exists
-            check_q = f"name = 'sorted' and mimeType = 'application/vnd.google-apps.folder' and '{body.drive_output_folder_id}' in parents and trashed = false"
-            check_res = service.files().list(q=check_q, fields="files(id)").execute()
-            
-            if check_res.get("files"):
-                sorted_folder_id = check_res["files"][0]["id"]
-                logger.info("Reusing existing 'sorted' folder: %s", sorted_folder_id)
-            else:
-                sorted_folder_id = service.files().create(body=sorted_folder_meta, fields="id").execute().get("id")
-                logger.info("Created new 'sorted' folder in Drive: %s", sorted_folder_id)
+            sorted_folder_id = body.drive_output_folder_id
+            logger.info("Using user-selected Google Drive folder as direct output: %s", sorted_folder_id)
 
             # Upload subfolders and files
             for cat_folder in temp_output.iterdir():

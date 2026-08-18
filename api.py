@@ -672,6 +672,7 @@ def classify_text(body: ClassifyTextRequest) -> ClassifyResponse:
     response_model=ClassifyResponse,
 )
 async def classify_pdf(
+    request: Request,
     file: Annotated[UploadFile, File(description="PDF file to classify.")],
     max_pages: Annotated[int, Query(ge=1, le=20)] = 3,
     llm_model: Annotated[Optional[str], Query(description="Override LLM model.")] = None,
@@ -760,6 +761,26 @@ async def classify_pdf(
     finally:
         # Clean up temporary upload folder
         shutil.rmtree(str(temp_dir), ignore_errors=True)
+        
+    try:
+        import sys
+        workspace_root = str(Path(__file__).resolve().parent.parent)
+        if workspace_root not in sys.path:
+            sys.path.insert(0, workspace_root)
+        from database.poc_db import log_classification_run
+        
+        processed_by = request.headers.get("X-Processed-By") or "SYSTEM"
+        log_classification_run(
+            task_id=f"classify-{safe_name}-{int(time.time())}",
+            original_file_name=original_name,
+            status="SUCCESS",
+            category=category,
+            confidence_score=float(score),
+            pdf_type=pdf_type,
+            processed_by=processed_by
+        )
+    except Exception as db_err:
+        logger.error("Failed to log classification run to DB: %s", db_err)
 
     return ClassifyResponse(
         filename=original_name,
@@ -1296,10 +1317,29 @@ def onedrive_classify(body: OneDriveClassifyRequest):
 import subprocess
 import json
 import sys
+import re
+import jwt
+from typing import Optional
 from onedrive_oauth import get_valid_token as od_get_token
 from google_oauth import get_credentials_from_cookie as google_get_creds
 
-STATE_FILE = Path(__file__).parent / ".sessions" / "pipeline_process.json"
+def get_user_email(request: Request) -> Optional[str]:
+    od_token = od_get_token(request)
+    if od_token:
+        try:
+            decoded = jwt.decode(od_token, options={"verify_signature": False})
+            return decoded.get("upn") or decoded.get("unique_name") or decoded.get("email")
+        except Exception:
+            pass
+    return None
+
+def get_state_file(user_email: Optional[str]) -> Path:
+    base_dir = Path(__file__).parent / ".sessions"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    if user_email:
+        sanitized = re.sub(r'[^a-zA-Z0-9]', '_', user_email.lower())
+        return base_dir / f"pipeline_process_{sanitized}.json"
+    return base_dir / "pipeline_process.json"
 
 def is_pid_running(pid: int) -> bool:
     try:
@@ -1335,9 +1375,12 @@ def get_automation_status(request: Request):
     pid = None
     started_at = None
     
-    if STATE_FILE.exists():
+    user_email = get_user_email(request)
+    state_file = get_state_file(user_email)
+    
+    if state_file.exists():
         try:
-            with open(STATE_FILE) as fh:
+            with open(state_file) as fh:
                 data = json.load(fh)
             pid = data.get("pid")
             if pid and is_pid_running(pid):
@@ -1369,9 +1412,12 @@ def start_automation(body: AutomationStartRequest, request: Request):
     elif body.provider == "gmail" and not gmail_conn:
         raise HTTPException(status_code=400, detail="gmail_not_connected")
         
-    if STATE_FILE.exists():
+    user_email = get_user_email(request)
+    state_file = get_state_file(user_email)
+    
+    if state_file.exists():
         try:
-            with open(STATE_FILE) as fh:
+            with open(state_file) as fh:
                 data = json.load(fh)
             old_pid = data.get("pid")
             if old_pid and is_pid_running(old_pid):
@@ -1387,8 +1433,12 @@ def start_automation(body: AutomationStartRequest, request: Request):
         raise HTTPException(status_code=500, detail="Orchestration scripts missing in workspace.")
         
     try:
+        cmd = [str(python_exe), str(start_script), "--provider", body.provider, "--interval", "60"]
+        if user_email:
+            cmd.extend(["--user", user_email])
+            
         proc = subprocess.Popen(
-            [str(python_exe), str(start_script), "--provider", body.provider, "--interval", "60"],
+            cmd,
             cwd=str(workspace_dir),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -1400,8 +1450,7 @@ def start_automation(body: AutomationStartRequest, request: Request):
             "provider": body.provider,
             "started_at": time.time()
         }
-        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(STATE_FILE, "w") as fh:
+        with open(state_file, "w") as fh:
             json.dump(state, fh)
             
         logger.info("Background automation started successfully for %s (PID=%d)", body.provider, proc.pid)
@@ -1411,10 +1460,13 @@ def start_automation(body: AutomationStartRequest, request: Request):
         raise HTTPException(status_code=500, detail=f"Spawn failed: {str(exc)}")
 
 @app.post("/api/automation/stop", tags=["🚀 Pipeline"])
-def stop_automation():
-    if STATE_FILE.exists():
+def stop_automation(request: Request):
+    user_email = get_user_email(request)
+    state_file = get_state_file(user_email)
+    
+    if state_file.exists():
         try:
-            with open(STATE_FILE) as fh:
+            with open(state_file) as fh:
                 data = json.load(fh)
             pid = data.get("pid")
             if pid and is_pid_running(pid):
@@ -1424,7 +1476,7 @@ def stop_automation():
             logger.warning("Error reading state file to stop process: %s", e)
             
         try:
-            STATE_FILE.unlink(missing_ok=True)
+            state_file.unlink(missing_ok=True)
         except Exception:
             pass
             
