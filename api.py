@@ -580,7 +580,7 @@ async def detect_pdf_type(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     finally:
-        tmp_path.unlink(missing_ok=True)
+        move_to_trash(tmp_path, module_name="file-classification-")
 
     return DetectResponse(
         filename=file.filename or "upload.pdf",
@@ -642,7 +642,7 @@ async def extract_text(
         logger.error("Extraction failed for %s: %s", file.filename, exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
     finally:
-        tmp_path.unlink(missing_ok=True)
+        move_to_trash(tmp_path, module_name="file-classification-")
 
     return ExtractResponse(
         filename=file.filename or "upload.pdf",
@@ -1401,6 +1401,7 @@ import subprocess
 import json
 from onedrive_oauth import get_valid_token as od_get_token
 from google_oauth import get_credentials_from_cookie as google_get_creds
+from universal_trash import move_to_trash
 
 STATE_FILE = Path(__file__).parent / ".sessions" / "pipeline_process.json"
 
@@ -1427,39 +1428,79 @@ def stop_pid(pid: int):
     except Exception as e:
         logger.warning("Failed to kill process %d: %s", pid, e)
 
+USER_STATE_FILE = BASE_DIR / ".user_automation_state.json"
+
+def _load_user_states() -> Dict[str, dict]:
+    if USER_STATE_FILE.exists():
+        try:
+            with open(USER_STATE_FILE) as fh:
+                return json.load(fh)
+        except Exception:
+            pass
+    return {}
+
+def _save_user_states(states: Dict[str, dict]):
+    USER_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(USER_STATE_FILE, "w") as fh:
+        json.dump(states, fh, indent=2)
+
 @app.get("/api/automation/status", tags=["🚀 Pipeline"])
-def get_automation_status(request: Request):
+def get_automation_status(request: Request, user_email: Optional[str] = None):
     outlook_conn = bool(od_get_token(request))
     gmail_conn = bool(google_get_creds(request))
     
-    running = False
+    if not user_email:
+        user_email = request.headers.get("x-user-email")
+        
+    states = _load_user_states()
+    active_users = []
+    user_running = False
     active_provider = None
     pid = None
     started_at = None
-    
-    if STATE_FILE.exists():
-        try:
-            with open(STATE_FILE) as fh:
-                data = json.load(fh)
-            pid = data.get("pid")
-            if pid and is_pid_running(pid):
-                running = True
-                active_provider = data.get("provider")
-                started_at = data.get("started_at")
-        except Exception:
-            pass
+
+    cleaned_states = {}
+    for email_key, u_state in states.items():
+        u_pid = u_state.get("pid")
+        if u_pid and is_pid_running(u_pid):
+            cleaned_states[email_key] = u_state
+            active_users.append({
+                "user_email": email_key,
+                "pid": u_pid,
+                "provider": u_state.get("provider"),
+                "started_at": u_state.get("started_at")
+            })
+
+    if len(cleaned_states) != len(states):
+        _save_user_states(cleaned_states)
+
+    if user_email and user_email in cleaned_states:
+        u_info = cleaned_states[user_email]
+        user_running = True
+        active_provider = u_info.get("provider")
+        pid = u_info.get("pid")
+        started_at = u_info.get("started_at")
+    elif not user_email and active_users:
+        last_u = active_users[-1]
+        user_running = True
+        active_provider = last_u.get("provider")
+        pid = last_u.get("pid")
+        started_at = last_u.get("started_at")
             
     return {
         "outlook_connected": outlook_conn,
         "gmail_connected": gmail_conn,
-        "running": running,
+        "running": user_running,
         "active_provider": active_provider,
         "pid": pid,
-        "started_at": started_at
+        "started_at": started_at,
+        "active_users": active_users,
+        "user_email": user_email
     }
 
 class AutomationStartRequest(BaseModel):
-    provider: str
+    provider: str = "outlook"
+    user_email: Optional[str] = None
 
 @app.post("/api/automation/start", tags=["🚀 Pipeline"])
 def start_automation(body: AutomationStartRequest, request: Request):
@@ -1471,15 +1512,13 @@ def start_automation(body: AutomationStartRequest, request: Request):
     elif body.provider == "gmail" and not gmail_conn:
         raise HTTPException(status_code=400, detail="gmail_not_connected")
         
-    if STATE_FILE.exists():
-        try:
-            with open(STATE_FILE) as fh:
-                data = json.load(fh)
-            old_pid = data.get("pid")
-            if old_pid and is_pid_running(old_pid):
-                stop_pid(old_pid)
-        except Exception:
-            pass
+    user_email = body.user_email or request.headers.get("x-user-email") or "system@local"
+    states = _load_user_states()
+
+    if user_email in states:
+        old_pid = states[user_email].get("pid")
+        if old_pid and is_pid_running(old_pid):
+            stop_pid(old_pid)
             
     workspace_dir = BASE_DIR.parent.resolve()
     python_exe = workspace_dir / "venv" / "Scripts" / "python.exe"
@@ -1490,23 +1529,27 @@ def start_automation(body: AutomationStartRequest, request: Request):
         
     try:
         proc = subprocess.Popen(
-            [str(python_exe), str(start_script), "--provider", body.provider, "--interval", "60"],
+            [str(python_exe), str(start_script), "--provider", body.provider, "--interval", "60", "--user", user_email],
             cwd=str(workspace_dir),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=0x08000000 | 0x00000008
         )
         
-        state = {
+        user_state = {
             "pid": proc.pid,
             "provider": body.provider,
+            "user_email": user_email,
             "started_at": time.time()
         }
+        states[user_email] = user_state
+        _save_user_states(states)
+        
         STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(STATE_FILE, "w") as fh:
-            json.dump(state, fh)
+            json.dump(user_state, fh)
             
-        logger.info("Background automation started successfully for %s (PID=%d)", body.provider, proc.pid)
+        logger.info("Background automation started successfully for %s (User=%s, PID=%d)", body.provider, user_email, proc.pid)
 
         # ── Log automation start to converter.db universal_history ────────────
         try:
@@ -1521,33 +1564,48 @@ def start_automation(body: AutomationStartRequest, request: Request):
                 action="Automation Pipeline Started",
                 file_name=None,
                 status="RUNNING",
-                details=f"Provider: {body.provider} | PID: {proc.pid}"
+                details=f"Provider: {body.provider} | PID: {proc.pid}",
+                processed_by=user_email
             )
         except Exception as _db_e:
             logger.warning("[converter.db] Failed to log automation start: %s", _db_e)
 
-        return {"status": "running", "pid": proc.pid, "provider": body.provider}
+        return {"status": "running", "pid": proc.pid, "provider": body.provider, "user_email": user_email}
     except Exception as exc:
         logger.error("Failed to spawn background automation: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f"Spawn failed: {str(exc)}")
 
+class AutomationStopRequest(BaseModel):
+    user_email: Optional[str] = None
+
 @app.post("/api/automation/stop", tags=["🚀 Pipeline"])
-def stop_automation():
-    if STATE_FILE.exists():
-        try:
-            with open(STATE_FILE) as fh:
-                data = json.load(fh)
-            pid = data.get("pid")
+def stop_automation(body: Optional[AutomationStopRequest] = None, request: Request = None):
+    target_user = (body.user_email if body else None) or (request.headers.get("x-user-email") if request else None)
+    states = _load_user_states()
+
+    stopped_count = 0
+    if target_user and target_user != "all":
+        if target_user in states:
+            pid = states[target_user].get("pid")
             if pid and is_pid_running(pid):
                 stop_pid(pid)
-                logger.info("Background automation process PID=%d stopped.", pid)
-        except Exception as e:
-            logger.warning("Error reading state file to stop process: %s", e)
-            
-        try:
-            STATE_FILE.unlink(missing_ok=True)
-        except Exception:
-            pass
+                logger.info("Background automation PID=%d stopped for user %s.", pid, target_user)
+                stopped_count += 1
+            del states[target_user]
+    else:
+        for email_key, u_info in list(states.items()):
+            pid = u_info.get("pid")
+            if pid and is_pid_running(pid):
+                stop_pid(pid)
+                logger.info("Background automation PID=%d stopped for user %s.", pid, email_key)
+                stopped_count += 1
+        states = {}
+
+    _save_user_states(states)
+    try:
+        move_to_trash(STATE_FILE, module_name="file-classification-")
+    except Exception:
+        pass
 
     # ── Log automation stop to converter.db universal_history ─────────────────
     try:
@@ -1562,12 +1620,13 @@ def stop_automation():
             action="Automation Pipeline Stopped",
             file_name=None,
             status="STOPPED",
-            details="Automation stopped by user via dashboard"
+            details=f"Automation stopped for {target_user or 'all users'}",
+            processed_by=target_user or "SYSTEM"
         )
     except Exception as _db_e:
         logger.warning("[converter.db] Failed to log automation stop: %s", _db_e)
 
-    return {"status": "stopped"}
+    return {"status": "stopped", "stopped_count": stopped_count}
 
 @app.get("/api/automation/logs", tags=["🚀 Pipeline"])
 def get_automation_logs(lines: int = 50):

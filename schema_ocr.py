@@ -9,6 +9,7 @@ from pathlib import Path
 import os
 import json
 import re
+from universal_trash import move_to_trash
 
 try:
     from openai import OpenAI  # only needed for LLM schema mapping
@@ -71,7 +72,7 @@ class SchemaOCRExtractor:
                 if temp_output.exists():
                     with open(temp_output, 'r', encoding='utf-8') as temp_f:
                         res_text = temp_f.read()
-                    temp_output.unlink()  # Clean up temp file
+                    move_to_trash(temp_output, module_name="file-classification-")  # Clean up temp file
                     return res_text
                 else:
                     return ""

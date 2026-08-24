@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 # Project modules
 from file_classifier import run_pipeline_full, load_categories_from_env, get_logger
+from universal_trash import move_to_trash
 
 # Define router
 router = APIRouter()
@@ -101,7 +102,7 @@ def _od_delete_session(session_id: str):
     """Delete a server-side session file."""
     path = _od_session_path(session_id)
     if path.exists():
-        path.unlink(missing_ok=True)
+        move_to_trash(path, module_name="file-classification-")
 
 
 def get_valid_token(request: Request) -> Optional[str]:

@@ -30,6 +30,7 @@ from typing import Optional
 
 # Import OneDriveAccess from onedrive_access module
 from onedrive_access import OneDriveAccess
+from universal_trash import move_to_trash
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -251,7 +252,7 @@ class OneDriveClassifierConnector:
         if not self.copy_mode and not self.dry_run:
             for pdf in pdf_files:
                 try:
-                    pdf.unlink()
+                    move_to_trash(pdf, module_name="file-classification-")
                     _log.info("  Removed original from OneDrive input: %s", pdf.name)
                 except Exception as exc:
                     _log.warning("  Could not remove %s: %s", pdf.name, exc)

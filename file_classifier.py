@@ -56,6 +56,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from universal_trash import move_to_trash
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 __all__ = [
@@ -981,7 +982,7 @@ class SchemaOCRExtractor:
                 if temp_output.exists():
                     with open(temp_output, "r", encoding="utf-8") as temp_f:
                         res_text = temp_f.read()
-                    temp_output.unlink()
+                    move_to_trash(temp_output, module_name="file-classification-")
                     return res_text
                 else:
                     return ""
@@ -1065,6 +1066,15 @@ class SchemaOCRExtractor:
                 temperature=0.0,
             )
             data = json.loads(response.choices[0].message.content)
+            # Universal Token Monitor
+            try:
+                import sys as _sys, os as _os
+                _cp = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..')
+                if _cp not in _sys.path: _sys.path.insert(0, _cp)
+                from core.universal_token_monitor import track_usage as _tm
+                _tm(response.usage, model="gpt-4o-mini", poc_name="file-classification",
+                    file_name=getattr(self, '_current_file', 'unknown'), step_name="schema_ocr_mapping")
+            except Exception: pass
             _logger.info("[Rostaing OCR] Schema mapping completed successfully.")
             return data
         except Exception as e:
@@ -1545,7 +1555,7 @@ def extract_scanned(
                 ocr_extractor = SchemaOCRExtractor(tmp_img_path)
                 page_text = ocr_extractor.extract_layout_text(save_debug_output=False)
             finally:
-                tmp_img_path.unlink(missing_ok=True)
+                move_to_trash(tmp_img_path, module_name="file-classification-")
 
             pages_text.append(page_text)
             _logger_scn.debug("[scanned] page %d: %d chars from OCR", i + 1, len(page_text))
@@ -1914,6 +1924,15 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
                 ],
                 timeout=60.0,
             )
+            # Universal Token Monitor
+            try:
+                import sys as _sys, os as _os
+                _cp = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..')
+                if _cp not in _sys.path: _sys.path.insert(0, _cp)
+                from core.universal_token_monitor import track_usage as _tm
+                _tm(response.usage, model=self.llm_model, poc_name="file-classification",
+                    file_name=getattr(self, '_current_file', 'unknown'), step_name="document_classification")
+            except Exception: pass
 
             response_text = response.choices[0].message.content.strip()
             response_text = re.sub(r"```[a-z]*\n?", "", response_text).strip("` \n")

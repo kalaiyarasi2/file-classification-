@@ -27,6 +27,7 @@ import time
 import logging
 from pathlib import Path
 from typing import Optional
+from universal_trash import move_to_trash
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 
@@ -269,7 +270,7 @@ class DriveClassifierConnector:
         if not self.copy_mode and not self.dry_run:
             for pdf in pdf_files:
                 try:
-                    pdf.unlink()
+                    move_to_trash(pdf, module_name="file-classification-")
                     _log.info("  Removed original from Drive input: %s", pdf.name)
                 except Exception as exc:
                     _log.warning("  Could not remove %s: %s", pdf.name, exc)
