@@ -18,6 +18,11 @@ import tempfile
 import time
 import traceback
 from pathlib import Path
+import sys
+BASE_DIR = Path(__file__).parent.resolve()
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 from typing import Annotated, Optional
 
 from fastapi import (
@@ -54,6 +59,8 @@ from onedrive_access import OneDriveAccess
 from onedrive_connector import OneDriveClassifierConnector
 
 logger = get_logger("file_classifier.api")
+
+import monitor_db as mdb
 
 # ── App setup ─────────────────────────────────────────────────────────────────
 
@@ -114,6 +121,16 @@ app.include_router(google_oauth_router)
 # ── OneDrive OAuth & Cloud API Routes ─────────────────────────────────────────
 from onedrive_oauth import router as onedrive_oauth_router
 app.include_router(onedrive_oauth_router)
+
+# ── File Converter Routes & DB Setup ──────────────────────────────────────────
+try:
+    from database.db import init_db
+    from controllers.converter_controller import router as converter_router
+    init_db()
+    app.include_router(converter_router, prefix="/api/convert", tags=["Format Converter"])
+    logger.info("Universal Format Converter router loaded successfully.")
+except Exception as e:
+    logger.error(f"Failed to load format converter router: {e}")
 
 
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
@@ -408,6 +425,18 @@ class ReportResponse(BaseModel):
     rows: list[ReportRow]
 
 
+# Rebuild models for Pydantic v2 deferred annotations
+for _model in [
+    HealthResponse, CategoryInfo, ConfigResponse, DetectResponse, ExtractResponse,
+    ClassifyTextRequest, ScoreDetail, ClassifyResponse, OrganiseRequest, OrganiseResponse,
+    PipelineRequest, PipelineResultItem, PipelineResponse, ReportRow, ReportResponse
+]:
+    try:
+        _model.model_rebuild()
+    except Exception:
+        pass
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Shared helpers
 # ══════════════════════════════════════════════════════════════════════════════
@@ -551,7 +580,7 @@ async def detect_pdf_type(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     finally:
-        tmp_path.unlink(missing_ok=True)
+        move_to_trash(tmp_path, module_name="file-classification-")
 
     return DetectResponse(
         filename=file.filename or "upload.pdf",
@@ -613,7 +642,7 @@ async def extract_text(
         logger.error("Extraction failed for %s: %s", file.filename, exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
     finally:
-        tmp_path.unlink(missing_ok=True)
+        move_to_trash(tmp_path, module_name="file-classification-")
 
     return ExtractResponse(
         filename=file.filename or "upload.pdf",
@@ -679,6 +708,7 @@ async def classify_pdf(
     threshold: Annotated[Optional[float], Query(ge=0, le=10, description="Override min score.")] = None,
     force_ocr: Annotated[bool, Query(description="Force OCR even for digital PDFs.")] = False,
     categories: Annotated[Optional[str], Query(description="Comma-separated list of active categories.")] = None,
+    run_id: Annotated[Optional[str], Query(description="Optional pipeline run ID.")] = None,
 ) -> ClassifyResponse:
     """
     Uploads a PDF, extracts its text, classifies it, and saves the outputs to the server.
@@ -755,6 +785,38 @@ async def classify_pdf(
         )
         txt_path.write_text(txt_header + text, encoding="utf-8")
 
+        # ── Log to Monitor DB ──
+        try:
+            elapsed_ms = int((time.perf_counter() - t0) * 1000)
+            active_run_id = run_id or "single_classification"
+            
+            conn = mdb._connect()
+            exists = conn.execute("SELECT 1 FROM pipeline_runs WHERE run_id=?", (active_run_id,)).fetchone()
+            conn.close()
+            if not exists:
+                mdb.run_start(active_run_id, "manual_client" if run_id else "single_request")
+                
+            mdb.log_file(
+                run_id=active_run_id,
+                filename=original_name,
+                category=category,
+                pdf_type=pdf_type,
+                score=round(score * 10, 2),
+                file_size=tmp_path.stat().st_size if tmp_path.exists() else None,
+                processing_ms=elapsed_ms,
+                sent_to_gpu=False,
+                error=error_msg or ("Empty text extracted" if not text.strip() else None),
+            )
+            
+            conn = mdb._connect()
+            conn.execute("UPDATE pipeline_runs SET files_classified = files_classified + 1 WHERE run_id=?", (active_run_id,))
+            conn.commit()
+            conn.close()
+            
+            mdb.heartbeat("classifier", "online")
+        except Exception as mdb_err:
+            logger.warning("Failed to log to monitor database: %s", mdb_err)
+
     except Exception as exc:
         logger.error("classify_pdf failed for %s: %s", original_name, exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -790,7 +852,7 @@ async def classify_pdf(
         pdf_type=pdf_type,
         rotation_info=rotation_info,
         classification_time_sec=round(time.perf_counter() - t0, 4),
-        error=error_msg or ("Empty text extracted" if not text.strip() else ""),
+        error=(error_msg or "Empty text extracted") if not text.strip() else "",
         extracted_text=text,
     )
 
@@ -894,6 +956,48 @@ def run_pipeline_endpoint(body: PipelineRequest) -> PipelineResponse:
             dry_run=body.dry_run,
             poppler_path=poppler,
         )
+        
+        # ── Log manual server-side run to monitor database ──
+        try:
+            import uuid
+            run_id = str(uuid.uuid4())
+            mdb.run_start(run_id, "manual_server")
+            
+            for r in results:
+                f_path = Path(r.get("original_path", ""))
+                dest_dir = Path(r.get("destination_folder", ""))
+                dest_file = dest_dir / r.get("file_name", "")
+                if dest_file.exists():
+                    f_size = dest_file.stat().st_size
+                elif f_path.exists():
+                    f_size = f_path.stat().st_size
+                else:
+                    f_size = None
+                    
+                mdb.log_file(
+                    run_id=run_id,
+                    filename=r.get("file_name", ""),
+                    category=r.get("category", "Others"),
+                    pdf_type=r.get("pdf_type", ""),
+                    score=float(r.get("llm_score", 0)),
+                    file_size=f_size,
+                    processing_ms=int(float(r.get("processing_time", 0)) * 1000),
+                    sent_to_gpu=False,
+                    error=r.get("error", None) or None,
+                )
+                
+            failed_count = sum(1 for r in results if r.get("error"))
+            mdb.run_finish(
+                run_id=run_id,
+                status="completed",
+                attachments=len(results),
+                files_classified=len(results) - failed_count,
+                errors=failed_count
+            )
+            
+            mdb.heartbeat("classifier", "online")
+        except Exception as mdb_err:
+            logger.warning("Failed to log server pipeline run to monitor database: %s", mdb_err)
     except Exception as exc:
         logger.error("Pipeline failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
@@ -1309,191 +1413,6 @@ def onedrive_classify(body: OneDriveClassifyRequest):
         logger.error("onedrive_classify error: %s", exc, exc_info=True)
         raise HTTPException(status_code=500, detail=str(exc))
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# SECTION 11 - BACKGROUND AUTOMATION PIPELINE
-# ══════════════════════════════════════════════════════════════════════════════
-
-import subprocess
-import json
-import sys
-import re
-import jwt
-from typing import Optional
-from onedrive_oauth import get_valid_token as od_get_token
-from google_oauth import get_credentials_from_cookie as google_get_creds
-
-def get_user_email(request: Request) -> Optional[str]:
-    od_token = od_get_token(request)
-    if od_token:
-        try:
-            decoded = jwt.decode(od_token, options={"verify_signature": False})
-            return decoded.get("upn") or decoded.get("unique_name") or decoded.get("email")
-        except Exception:
-            pass
-    return None
-
-def get_state_file(user_email: Optional[str]) -> Path:
-    base_dir = Path(__file__).parent / ".sessions"
-    base_dir.mkdir(parents=True, exist_ok=True)
-    if user_email:
-        sanitized = re.sub(r'[^a-zA-Z0-9]', '_', user_email.lower())
-        return base_dir / f"pipeline_process_{sanitized}.json"
-    return base_dir / "pipeline_process.json"
-
-def is_pid_running(pid: int) -> bool:
-    try:
-        proc = subprocess.run(
-            ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
-            capture_output=True,
-            text=True,
-            check=True,
-            creationflags=0x08000000
-        )
-        return str(pid) in proc.stdout
-    except Exception:
-        return False
-
-def stop_pid(pid: int):
-    try:
-        subprocess.run(
-            ["taskkill", "/F", "/T", "/PID", str(pid)],
-            check=True,
-            creationflags=0x08000000
-        )
-    except Exception as e:
-        logger.warning("Failed to kill process %d: %s", pid, e)
-
-@app.get("/api/automation/status", tags=["🚀 Pipeline"])
-def get_automation_status(request: Request):
-    logger.info("automation/status cookies: %s", request.cookies)
-    outlook_conn = bool(od_get_token(request))
-    gmail_conn = bool(google_get_creds(request))
-    
-    running = False
-    active_provider = None
-    pid = None
-    started_at = None
-    
-    user_email = get_user_email(request)
-    state_file = get_state_file(user_email)
-    
-    if state_file.exists():
-        try:
-            with open(state_file) as fh:
-                data = json.load(fh)
-            pid = data.get("pid")
-            if pid and is_pid_running(pid):
-                running = True
-                active_provider = data.get("provider")
-                started_at = data.get("started_at")
-        except Exception:
-            pass
-            
-    return {
-        "outlook_connected": outlook_conn,
-        "gmail_connected": gmail_conn,
-        "running": running,
-        "active_provider": active_provider,
-        "pid": pid,
-        "started_at": started_at
-    }
-
-class AutomationStartRequest(BaseModel):
-    provider: str
-
-@app.post("/api/automation/start", tags=["🚀 Pipeline"])
-def start_automation(body: AutomationStartRequest, request: Request):
-    outlook_conn = bool(od_get_token(request))
-    gmail_conn = bool(google_get_creds(request))
-    
-    if body.provider == "outlook" and not outlook_conn:
-        raise HTTPException(status_code=400, detail="outlook_not_connected")
-    elif body.provider == "gmail" and not gmail_conn:
-        raise HTTPException(status_code=400, detail="gmail_not_connected")
-        
-    user_email = get_user_email(request)
-    state_file = get_state_file(user_email)
-    
-    if state_file.exists():
-        try:
-            with open(state_file) as fh:
-                data = json.load(fh)
-            old_pid = data.get("pid")
-            if old_pid and is_pid_running(old_pid):
-                stop_pid(old_pid)
-        except Exception:
-            pass
-            
-    workspace_dir = Path(__file__).resolve().parent.parent
-    python_exe = sys.executable
-    start_script = workspace_dir / "start_flow.py"
-    
-    if not start_script.exists():
-        raise HTTPException(status_code=500, detail="Orchestration scripts missing in workspace.")
-        
-    try:
-        cmd = [str(python_exe), str(start_script), "--provider", body.provider, "--interval", "60"]
-        if user_email:
-            cmd.extend(["--user", user_email])
-            
-        proc = subprocess.Popen(
-            cmd,
-            cwd=str(workspace_dir),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=0x08000000 | 0x00000008
-        )
-        
-        state = {
-            "pid": proc.pid,
-            "provider": body.provider,
-            "started_at": time.time()
-        }
-        with open(state_file, "w") as fh:
-            json.dump(state, fh)
-            
-        logger.info("Background automation started successfully for %s (PID=%d)", body.provider, proc.pid)
-        return {"status": "running", "pid": proc.pid, "provider": body.provider}
-    except Exception as exc:
-        logger.error("Failed to spawn background automation: %s", exc, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Spawn failed: {str(exc)}")
-
-@app.post("/api/automation/stop", tags=["🚀 Pipeline"])
-def stop_automation(request: Request):
-    user_email = get_user_email(request)
-    state_file = get_state_file(user_email)
-    
-    if state_file.exists():
-        try:
-            with open(state_file) as fh:
-                data = json.load(fh)
-            pid = data.get("pid")
-            if pid and is_pid_running(pid):
-                stop_pid(pid)
-                logger.info("Background automation process PID=%d stopped.", pid)
-        except Exception as e:
-            logger.warning("Error reading state file to stop process: %s", e)
-            
-        try:
-            state_file.unlink(missing_ok=True)
-        except Exception:
-            pass
-            
-    return {"status": "stopped"}
-
-@app.get("/api/automation/logs", tags=["🚀 Pipeline"])
-def get_automation_logs(lines: int = 50):
-    log_file = Path(__file__).resolve().parent.parent / "logs" / "document_organizer.log"
-    if not log_file.exists():
-        return {"logs": ["Log file does not exist yet."]}
-    try:
-        with open(log_file, "r", encoding="utf-8", errors="ignore") as fh:
-            content = fh.readlines()
-        last_lines = content[-lines:] if len(content) > lines else content
-        return {"logs": [line.strip() for line in last_lines]}
-    except Exception as e:
-        return {"logs": [f"Error reading logs: {str(e)}"]}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Dev entry point

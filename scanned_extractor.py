@@ -21,6 +21,7 @@ import re
 import tempfile
 import shutil
 from pathlib import Path
+from universal_trash import move_to_trash
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +175,7 @@ def extract(
                 ocr_extractor = SchemaOCRExtractor(tmp_img_path)
                 page_text = ocr_extractor.extract_layout_text(save_debug_output=False)
             finally:
-                tmp_img_path.unlink(missing_ok=True)
+                move_to_trash(tmp_img_path, module_name="file-classification-")
 
             pages_text.append(page_text)
             logger.debug("[scanned] page %d: %d chars from OCR", i + 1, len(page_text))

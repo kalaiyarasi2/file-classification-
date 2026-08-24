@@ -3,6 +3,7 @@ import {
   LayoutDashboard, FileText, Tags,
   Workflow, FolderTree, Cloud, BarChart3, Activity, Terminal,
   Settings2, SlidersHorizontal, Info, Shield, ChevronLeft, ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ const groups: NavGroup[] = [
       { label: "Dashboard", to: "/", icon: LayoutDashboard },
       { label: "Text Extraction", to: "/extraction", icon: FileText },
       { label: "Classification", to: "/classification", icon: Tags },
+      { label: "File Converter", to: "/converter", icon: RefreshCw },
     ],
   },
   {

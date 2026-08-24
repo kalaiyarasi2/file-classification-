@@ -20,6 +20,7 @@ import { Route as HealthRouteImport } from './routes/health'
 import { Route as ExtractionRouteImport } from './routes/extraction'
 import { Route as DriveRouteImport } from './routes/drive'
 import { Route as DetectionRouteImport } from './routes/detection'
+import { Route as ConverterRouteImport } from './routes/converter'
 import { Route as ConfigurationRouteImport } from './routes/configuration'
 import { Route as ClassificationRouteImport } from './routes/classification'
 import { Route as AboutRouteImport } from './routes/about'
@@ -80,6 +81,11 @@ const DetectionRoute = DetectionRouteImport.update({
   path: '/detection',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConverterRoute = ConverterRouteImport.update({
+  id: '/converter',
+  path: '/converter',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConfigurationRoute = ConfigurationRouteImport.update({
   id: '/configuration',
   path: '/configuration',
@@ -106,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/classification': typeof ClassificationRoute
   '/configuration': typeof ConfigurationRoute
+  '/converter': typeof ConverterRoute
   '/detection': typeof DetectionRoute
   '/drive': typeof DriveRoute
   '/extraction': typeof ExtractionRoute
@@ -123,6 +130,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/classification': typeof ClassificationRoute
   '/configuration': typeof ConfigurationRoute
+  '/converter': typeof ConverterRoute
   '/detection': typeof DetectionRoute
   '/drive': typeof DriveRoute
   '/extraction': typeof ExtractionRoute
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/classification': typeof ClassificationRoute
   '/configuration': typeof ConfigurationRoute
+  '/converter': typeof ConverterRoute
   '/detection': typeof DetectionRoute
   '/drive': typeof DriveRoute
   '/extraction': typeof ExtractionRoute
@@ -160,6 +169,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/classification'
     | '/configuration'
+    | '/converter'
     | '/detection'
     | '/drive'
     | '/extraction'
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/classification'
     | '/configuration'
+    | '/converter'
     | '/detection'
     | '/drive'
     | '/extraction'
@@ -194,6 +205,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/classification'
     | '/configuration'
+    | '/converter'
     | '/detection'
     | '/drive'
     | '/extraction'
@@ -212,6 +224,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   ClassificationRoute: typeof ClassificationRoute
   ConfigurationRoute: typeof ConfigurationRoute
+  ConverterRoute: typeof ConverterRoute
   DetectionRoute: typeof DetectionRoute
   DriveRoute: typeof DriveRoute
   ExtractionRoute: typeof ExtractionRoute
@@ -304,6 +317,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DetectionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/converter': {
+      id: '/converter'
+      path: '/converter'
+      fullPath: '/converter'
+      preLoaderRoute: typeof ConverterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/configuration': {
       id: '/configuration'
       path: '/configuration'
@@ -340,6 +360,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   ClassificationRoute: ClassificationRoute,
   ConfigurationRoute: ConfigurationRoute,
+  ConverterRoute: ConverterRoute,
   DetectionRoute: DetectionRoute,
   DriveRoute: DriveRoute,
   ExtractionRoute: ExtractionRoute,
