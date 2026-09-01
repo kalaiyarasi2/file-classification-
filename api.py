@@ -32,6 +32,7 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
+from universal_trash import move_to_trash
 
 # ── Import the single-file module ────────────────────────────────────────────
 from file_classifier import (
@@ -834,11 +835,9 @@ async def classify_pdf(
         processed_by = request.headers.get("X-Processed-By") or "SYSTEM"
         log_classification_run(
             task_id=f"classify-{safe_name}-{int(time.time())}",
-            original_file_name=original_name,
+            file_name=original_name,
             status="SUCCESS",
             category=category,
-            confidence_score=float(score),
-            pdf_type=pdf_type,
             processed_by=processed_by
         )
     except Exception as db_err:
@@ -1414,9 +1413,204 @@ def onedrive_classify(body: OneDriveClassifyRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SECTION 10 - BACKGROUND AUTOMATION PIPELINE
+# ══════════════════════════════════════════════════════════════════════════════
+
+import subprocess
+import json as _json
+from onedrive_oauth import get_valid_token as od_get_token
+from google_oauth import get_credentials_from_cookie as google_get_creds
+
+SESSIONS_DIR = Path(__file__).parent / ".sessions"
+
+
+def _safe_email(email: str) -> str:
+    """Convert email to a safe filename-friendly string."""
+    return email.lower().replace("@", "_at_").replace(".", "_").replace("+", "_")
+
+
+def get_user_state_file(user_email: Optional[str]) -> Path:
+    """Return the per-user state file path. Falls back to legacy global file if no email given."""
+    if user_email:
+        return SESSIONS_DIR / f"pipeline_{_safe_email(user_email)}.json"
+    return SESSIONS_DIR / "pipeline_process.json"
+
+
+def is_pid_running(pid: int) -> bool:
+    try:
+        proc = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+            capture_output=True,
+            text=True,
+            check=True,
+            creationflags=0x08000000
+        )
+        return str(pid) in proc.stdout
+    except Exception:
+        return False
+
+
+def stop_pid(pid: int):
+    try:
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(pid)],
+            check=True,
+            creationflags=0x08000000
+        )
+    except Exception as e:
+        logger.warning("Failed to kill process %d: %s", pid, e)
+
+
+@app.get("/api/automation/status", tags=["🚀 Pipeline"])
+def get_automation_status(request: Request, user_email: Optional[str] = Query(None)):
+    outlook_conn = bool(od_get_token(request))
+    gmail_conn = bool(google_get_creds(request))
+
+    running = False
+    active_provider = None
+    pid = None
+    started_at = None
+
+    state_file = get_user_state_file(user_email)
+    if state_file.exists():
+        try:
+            with open(state_file) as fh:
+                data = _json.load(fh)
+            pid = data.get("pid")
+            if pid and is_pid_running(pid):
+                running = True
+                active_provider = data.get("provider")
+                started_at = data.get("started_at")
+        except Exception:
+            pass
+
+    return {
+        "outlook_connected": outlook_conn,
+        "gmail_connected": gmail_conn,
+        "running": running,
+        "active_provider": active_provider,
+        "pid": pid,
+        "started_at": started_at,
+        "user_email": user_email,
+    }
+
+
+class AutomationStartRequest(BaseModel):
+    provider: str
+    user_email: Optional[str] = None
+
+
+@app.post("/api/automation/start", tags=["🚀 Pipeline"])
+def start_automation(body: AutomationStartRequest, request: Request):
+    outlook_conn = bool(od_get_token(request))
+    gmail_conn = bool(google_get_creds(request))
+
+    if body.provider == "outlook" and not outlook_conn:
+        raise HTTPException(status_code=400, detail="outlook_not_connected")
+    elif body.provider == "gmail" and not gmail_conn:
+        raise HTTPException(status_code=400, detail="gmail_not_connected")
+
+    # Stop any existing process for THIS user only
+    state_file = get_user_state_file(body.user_email)
+    if state_file.exists():
+        try:
+            with open(state_file) as fh:
+                data = _json.load(fh)
+            old_pid = data.get("pid")
+            if old_pid and is_pid_running(old_pid):
+                stop_pid(old_pid)
+        except Exception:
+            pass
+
+    workspace_dir = Path(__file__).resolve().parent.parent  # Sales team - Copy
+    python_exe = workspace_dir.parent / "venv" / "Scripts" / "python.exe"
+    start_script = workspace_dir / "start_flow.py"
+
+    if not python_exe.exists() or not start_script.exists():
+        raise HTTPException(status_code=500, detail="Orchestration scripts or venv missing in workspace.")
+
+    cmd_args = [str(python_exe), str(start_script), "--provider", body.provider, "--interval", "60"]
+    if body.user_email:
+        cmd_args.extend(["--user", body.user_email])
+
+    try:
+        proc = subprocess.Popen(
+            cmd_args,
+            cwd=str(workspace_dir),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=0x08000000 | 0x00000008
+        )
+
+        state = {
+            "pid": proc.pid,
+            "provider": body.provider,
+            "user_email": body.user_email,
+            "started_at": time.time()
+        }
+        SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        with open(state_file, "w") as fh:
+            _json.dump(state, fh)
+
+        logger.info("Background automation started for %s by %s (PID=%d)", body.provider, body.user_email or "unknown", proc.pid)
+        return {"status": "running", "pid": proc.pid, "provider": body.provider, "user_email": body.user_email}
+    except Exception as exc:
+        logger.error("Failed to spawn background automation: %s", exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Spawn failed: {str(exc)}")
+
+
+class AutomationStopRequest(BaseModel):
+    user_email: Optional[str] = None
+
+
+@app.post("/api/automation/stop", tags=["🚀 Pipeline"])
+def stop_automation(body: AutomationStopRequest = AutomationStopRequest()):
+    state_file = get_user_state_file(body.user_email)
+    if state_file.exists():
+        try:
+            with open(state_file) as fh:
+                data = _json.load(fh)
+            pid = data.get("pid")
+            if pid and is_pid_running(pid):
+                stop_pid(pid)
+                logger.info("Background automation process PID=%d stopped for user %s.", pid, body.user_email or "unknown")
+        except Exception as e:
+            logger.warning("Error reading state file to stop process: %s", e)
+
+        try:
+            move_to_trash(state_file, module_name="file-classification-")
+        except Exception:
+            pass
+
+    return {"status": "stopped", "user_email": body.user_email}
+
+
+
+@app.get("/api/automation/logs", tags=["🚀 Pipeline"])
+def get_automation_logs(lines: int = 50):
+    # Try to find the log file relative to the workspace
+    possible_log_paths = [
+        Path(__file__).resolve().parent.parent / "logs" / "document_organizer.log",
+        Path(__file__).resolve().parent / "logs" / "automation.log",
+    ]
+    log_file = next((p for p in possible_log_paths if p.exists()), None)
+    if not log_file:
+        return {"logs": ["Log file does not exist yet."]}
+    try:
+        with open(log_file, "r", encoding="utf-8", errors="ignore") as fh:
+            content = fh.readlines()
+        last_lines = content[-lines:] if len(content) > lines else content
+        return {"logs": [line.strip() for line in last_lines]}
+    except Exception as e:
+        return {"logs": [f"Error reading logs: {str(e)}"]}
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Dev entry point
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 if __name__ == "__main__":
     import uvicorn

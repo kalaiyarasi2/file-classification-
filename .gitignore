@@ -11,3 +11,4 @@ output/*
 .pytest_cache/*
 input/*
 scratch/*
+converter.db
