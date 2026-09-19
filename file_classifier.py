@@ -1824,7 +1824,7 @@ class DocumentClassifier:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def classify(self, text: str) -> tuple[str, float]:
+    def classify(self, text: str, file_name: str = "unknown") -> tuple[str, float]:
         """
         Assign a category to *text*.
 
@@ -1837,7 +1837,7 @@ class DocumentClassifier:
             return self.OTHERS, 0.0
 
         if self.llm_enabled:
-            category, score = self._classify_with_llm(text)
+            category, score = self._classify_with_llm(text, file_name)
             return category, round(score / 10.0, 4)
 
         category, score = self._classify_fuzzy(text)
@@ -1845,7 +1845,7 @@ class DocumentClassifier:
 
     # ── LLM Scorer (Primary) ───────────────────────────────────────────────────
 
-    def _classify_with_llm(self, text: str) -> tuple[str, float]:
+    def _classify_with_llm(self, text: str, file_name: str = "unknown") -> tuple[str, float]:
         """
         Ask the LLM to score each category based on keyword presence.
 
@@ -1931,7 +1931,7 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
                 if _cp not in _sys.path: _sys.path.insert(0, _cp)
                 from core.universal_token_monitor import track_usage as _tm
                 _tm(response.usage, model=self.llm_model, poc_name="file-classification",
-                    file_name=getattr(self, '_current_file', 'unknown'), step_name="document_classification")
+                    file_name=file_name, step_name="document_classification")
             except Exception: pass
 
             response_text = response.choices[0].message.content.strip()
@@ -1945,7 +1945,8 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
                 from core.universal_token_monitor import track_usage
                 
                 if hasattr(response, 'usage') and response.usage:
-                    track_usage("FILE_CLASSIFICATION", self.llm_model, response.usage.prompt_tokens, response.usage.completion_tokens, "classification_llm")
+                    track_usage(response.usage, model=self.llm_model, poc_name="FILE_CLASSIFICATION",
+                                file_name=file_name, step_name="classification_llm")
             except Exception as e:
                 _logger_cls.warning("Failed to track tokens: %s", e)
                 

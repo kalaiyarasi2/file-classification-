@@ -84,7 +84,7 @@ class DocumentClassifier:
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
-    def classify(self, text: str) -> tuple[str, float]:
+    def classify(self, text: str, file_name: str = "unknown") -> tuple[str, float]:
         """
         Assign a category to *text*.
 
@@ -97,7 +97,7 @@ class DocumentClassifier:
             return self.OTHERS, 0.0
 
         if self.llm_enabled:
-            category, score = self._classify_with_llm(text)
+            category, score = self._classify_with_llm(text, file_name)
             # Normalise 0-10 -> 0-1 for report compatibility
             return category, round(score / 10.0, 4)
 
@@ -107,7 +107,7 @@ class DocumentClassifier:
 
     # ── LLM Scorer (Primary) ───────────────────────────────────────────────────
 
-    def _classify_with_llm(self, text: str) -> tuple[str, float]:
+    def _classify_with_llm(self, text: str, file_name: str = "unknown") -> tuple[str, float]:
         """
         Ask the LLM to score each category based on keyword presence.
 
@@ -203,7 +203,7 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
                 from core.universal_token_monitor import track_usage
                 
                 if hasattr(response, 'usage') and response.usage:
-                    track_usage("FILE_CLASSIFICATION", self.llm_model, response.usage.prompt_tokens, response.usage.completion_tokens, "classification_llm")
+                    track_usage("FILE_CLASSIFICATION", self.llm_model, response.usage.prompt_tokens, response.usage.completion_tokens, "classification_llm", file_name)
             except Exception as e:
                 logger.warning("Failed to track tokens: %s", e)
                 
