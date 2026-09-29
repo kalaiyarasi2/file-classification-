@@ -32,6 +32,8 @@ SCOPES = [
     "Files.ReadWrite.All",
     "Sites.ReadWrite.All",
     "User.Read",
+    "Mail.Send",
+    "Mail.Send.Shared",
 ]
 
 # --------------------------------------------------------------------------
