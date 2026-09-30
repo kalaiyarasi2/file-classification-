@@ -12,3 +12,4 @@ output/*
 input/*
 scratch/*
 converter.db
+*.db
