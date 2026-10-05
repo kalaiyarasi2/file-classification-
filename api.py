@@ -455,7 +455,7 @@ def _get_classifier(
     if active_categories is not None:
         categories = {k: v for k, v in categories.items() if k in active_categories}
     model = llm_model or get_env_setting("LLM_MODEL", "gpt-4o")
-    thresh = threshold if threshold is not None else float(get_env_setting("MIN_SCORE_THRESHOLD", "3"))
+    thresh = threshold if threshold is not None else float(get_env_setting("MIN_SCORE_THRESHOLD", "5"))
     return DocumentClassifier(categories=categories, threshold=thresh, llm_model=model, llm_enabled=True)
 
 
@@ -768,7 +768,7 @@ async def classify_pdf(
         if text.strip():
             active_cats = [c.strip() for c in categories.split(",")] if categories else None
             classifier = _get_classifier(llm_model, threshold, active_categories=active_cats)
-            category, score = classifier.classify(text)
+            category, score = classifier.classify(text, file_name=original_name)
 
         # ── Save Processed PDF File on Server ──
         organizer = FileOrganizer(output_folder=output_folder, copy_mode=True)

@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import string
 from typing import Optional
@@ -67,11 +68,16 @@ class DocumentClassifier:
     def __init__(
         self,
         categories: dict[str, list[str]],
-        threshold: float = 3.0,
+        threshold: float | None = None,
         llm_model: str = "claude-sonnet-4-6",
         llm_enabled: bool = True,
     ) -> None:
         self.categories = categories
+        if threshold is None:
+            try:
+                threshold = float(os.getenv("MIN_SCORE_THRESHOLD", "5.0"))
+            except Exception:
+                threshold = 5.0
         self.threshold = threshold          # score out of 10
         self.llm_model = llm_model
         self.llm_enabled = llm_enabled
@@ -144,11 +150,12 @@ class DocumentClassifier:
 
         # Trim text to avoid huge prompts (extractor already limits to 3 pages)
         text_snippet = text[:4000]
+        file_name_hint = f"FILE NAME: {file_name}\n\n" if file_name and file_name != "unknown" else ""
 
         # ── Prompt ────────────────────────────────────────────────────────────
-        prompt = f"""You are a document classifier. Your job is to score how well a document matches each category based on keyword presence.
+        prompt = f"""You are an expert insurance document classifier. Your job is to classify the document into exactly ONE category based on keyword and semantic match.
 
-DOCUMENT TEXT (extracted from first 3 pages):
+{file_name_hint}DOCUMENT TEXT (extracted from first 3 pages):
 ---
 {text_snippet}
 ---
@@ -156,11 +163,12 @@ DOCUMENT TEXT (extracted from first 3 pages):
 CATEGORIES AND THEIR KEYWORDS:
 {categories_block}
 
-INSTRUCTIONS:
-For each category, count how many of its keywords appear in or are semantically present in the document text.
-Give each category a score from 0 to 10 (0 = no match, 10 = perfect match).
-Then identify the winner (category with the highest score).
-If no category scores above {self.threshold}, set winner to "Others".
+CRITICAL RULES:
+1. Pay close attention to the FILE NAME as well as the text. If the file name or text contains 'modworksheet', 'cwc mod', 'x-mod', 'xmod', 'exmod', 'risksummary', or 'experience rating', it belongs to MODIFIER (score 9-10).
+2. WORK_COMPENSATION is specifically for ACORD 130 / ACORD 133 Workers Compensation Application forms. Experience modifier worksheets, risk summaries, or rating worksheets are NOT WORK_COMPENSATION; they are MODIFIER.
+3. INSURANCE_CLAIMS is specifically for Loss Run reports and claims loss histories.
+4. Score each category from 0 to 10 based on how well the document matches.
+5. If no category scores at or above {self.threshold}, set winner to "Others".
 
 IMPORTANT: Respond ONLY with valid JSON in this exact format:
 {{
@@ -174,8 +182,11 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
 
         # ── Call OpenAI API ──────────────────────────────────────────────
         try:
-            from env_loader import get_env_setting
-            api_key = get_env_setting("OPENAI_API_KEY")
+            try:
+                from env_loader import get_env_setting
+                api_key = get_env_setting("OPENAI_API_KEY")
+            except ImportError:
+                api_key = os.getenv("OPENAI_API_KEY")
             client = openai.OpenAI(api_key=api_key if api_key else None)
 
             response = client.chat.completions.create(
