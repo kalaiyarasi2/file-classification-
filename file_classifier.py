@@ -58,6 +58,14 @@ from pathlib import Path
 from typing import Optional
 from universal_trash import move_to_trash
 
+try:
+    import core_gpu
+except ImportError:
+    _root_dir = Path(__file__).resolve().parent.parent
+    if str(_root_dir) not in sys.path:
+        sys.path.insert(0, str(_root_dir))
+    import core_gpu
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 __all__ = [
     # Logging
@@ -1376,6 +1384,7 @@ def extract(file_path: Path, max_pages: int = 3) -> tuple[str, str, str]:
     try:
         text, rotation_info = _extract_with_pdfplumber(file_path, max_pages)
         if text.strip() and not _needs_ocr(text, "pdfplumber"):
+            core_gpu.log_ocr_audit("Classification", "pdfplumber (Direct Text)", 1, pages_read, notes="Digital text layer extracted")
             return text, rotation_info, ""
     except Exception as exc:
         _logger_dig.warning("[digital] pdfplumber failed: %s - trying PyMuPDF.", exc)
@@ -1384,6 +1393,7 @@ def extract(file_path: Path, max_pages: int = 3) -> tuple[str, str, str]:
     try:
         text, rotation_info = _extract_with_fitz(file_path, max_pages)
         if text.strip() and not _needs_ocr(text, "PyMuPDF"):
+            core_gpu.log_ocr_audit("Classification", "PyMuPDF (Direct Text)", 1, pages_read, notes="Digital text layer extracted")
             return text, rotation_info, "pdfplumber failed; used PyMuPDF fallback"
     except Exception as exc:
         _logger_dig.error("[digital] Both extractors failed: %s", exc)
@@ -1392,6 +1402,7 @@ def extract(file_path: Path, max_pages: int = 3) -> tuple[str, str, str]:
     _logger_dig.info(
         "[digital] %s - switching to rostaing-ocr with auto-rotation (CID/sparse fallback).", file_path.name
     )
+    core_gpu.log_ocr_audit("Classification", "rostaing-ocr", 1, pages_read, notes="CID/sparse font fallback triggered")
     try:
         poppler = get_env_setting("POPPLER_PATH") or None
         ocr_text, ocr_rotation, ocr_error = extract_with_auto_rotation(
@@ -1548,12 +1559,15 @@ def extract_scanned(
                     file_path.name, i + 1, img_save_path,
                 )
 
+            t0_page = time.time()
             with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_img:
                 tmp_img_path = Path(tmp_img.name)
             try:
                 img.save(str(tmp_img_path))
                 ocr_extractor = SchemaOCRExtractor(tmp_img_path)
                 page_text = ocr_extractor.extract_layout_text(save_debug_output=False)
+                t_elapsed = time.time() - t0_page
+                core_gpu.log_ocr_audit("Classification", "SchemaOCRExtractor", i + 1, limit, elapsed_sec=t_elapsed)
             finally:
                 move_to_trash(tmp_img_path, module_name="file-classification-")
 
@@ -1879,6 +1893,11 @@ class DocumentClassifier:
             _logger_cls.warning("openai package not installed. Falling back to fuzzy scoring.")
             return self._classify_fuzzy(text)
 
+        _logger_cls.info(
+            "[CLASSIFY LLM] Scoring %d categories via OpenAI Cloud Model: %s (non-GPU step)",
+            len(self.categories),
+            self.llm_model,
+        )
         categories_block = "\n".join(
             f"- {cat}: {', '.join(kws)}"
             for cat, kws in self.categories.items()
