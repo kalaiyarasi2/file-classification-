@@ -134,7 +134,7 @@ def get_valid_token(request: Request) -> Optional[str]:
                 logger.info("OneDrive access token expired. Attempting to refresh...")
                 client_id = _read_env_key("MICROSOFT_CLIENT_ID")
                 client_secret = _read_env_key("MICROSOFT_CLIENT_SECRET")
-                tenant_id = _read_env_key("MICROSOFT_TENANT_ID", "4858c3ed-d305-48b4-80e0-0bcdbf8ff3ae")
+                tenant_id = _read_env_key("MICROSOFT_LOGIN_AUTHORITY") or _read_env_key("MICROSOFT_TENANT_ID") or "common"
                 authority = f"https://login.microsoftonline.com/{tenant_id}"
 
                 app = msal.ConfidentialClientApplication(
@@ -185,7 +185,7 @@ def onedrive_login(request: Request):
 
     client_id = _read_env_key("MICROSOFT_CLIENT_ID")
     client_secret = _read_env_key("MICROSOFT_CLIENT_SECRET")
-    tenant_id = _read_env_key("MICROSOFT_TENANT_ID", "4858c3ed-d305-48b4-80e0-0bcdbf8ff3ae")
+    tenant_id = _read_env_key("MICROSOFT_LOGIN_AUTHORITY") or _read_env_key("MICROSOFT_TENANT_ID") or "common"
     authority = f"https://login.microsoftonline.com/{tenant_id}"
     callback_url = get_onedrive_redirect_uri(request)
 
@@ -266,7 +266,7 @@ def onedrive_callback(request: Request, code: str = None, state: str = None, err
 
     client_id = _read_env_key("MICROSOFT_CLIENT_ID")
     client_secret = _read_env_key("MICROSOFT_CLIENT_SECRET")
-    tenant_id = _read_env_key("MICROSOFT_TENANT_ID", "4858c3ed-d305-48b4-80e0-0bcdbf8ff3ae")
+    tenant_id = _read_env_key("MICROSOFT_LOGIN_AUTHORITY") or _read_env_key("MICROSOFT_TENANT_ID") or "common"
     authority = f"https://login.microsoftonline.com/{tenant_id}"
     callback_url = get_onedrive_redirect_uri(request)
 
