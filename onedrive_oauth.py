@@ -41,17 +41,20 @@ SCOPES = [
 # --------------------------------------------------------------------------
 def _read_env_key(key: str, default: str = "") -> str:
     """Read a single key from .env or os.environ (no external lib required)."""
-    if key in os.environ:
-        return os.environ[key]
-    env_path = Path(__file__).parent / ".env"
-    if env_path.exists():
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            k, _, v = line.partition("=")
-            if k.strip() == key:
-                return v.strip().strip('"').strip("'")
+    if key in os.environ and os.environ[key].strip():
+        return os.environ[key].strip()
+    for env_path in [
+        Path(__file__).resolve().parent.parent / ".env",
+        Path(__file__).resolve().parent / ".env",
+    ]:
+        if env_path.exists():
+            for line in env_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, _, v = line.partition("=")
+                if k.strip() == key:
+                    return v.strip().strip('"').strip("'")
     return default
 
 
@@ -69,7 +72,7 @@ def get_onedrive_redirect_uri(request: Request) -> str:
         return env_uri
     # Construct callback dynamically, normalizing to localhost for cookie consistency
     url = str(request.url_for("onedrive_callback"))
-    if request.headers.get("x-forwarded-proto") == "https":
+    if request.headers.get("x-forwarded-proto") == "https" or "app.drive360.ai" in url:
         url = url.replace("http://", "https://")
         
     # IIS URL Rewrite drops the original host and sets it to 127.0.0.1:9000. 
@@ -359,6 +362,13 @@ def onedrive_logout(request: Request):
     response.delete_cookie("onedrive_session_id", path="/")
     response.delete_cookie("onedrive_credentials", path="/")  # clean up old cookie if present
     return response
+
+
+@router.get("/onedrive", include_in_schema=False)
+@router.get("/onedrive/", include_in_schema=False)
+def onedrive_bare_redirect():
+    """Safety fallback: If a bare /onedrive request reaches FastAPI, redirect to the app root."""
+    return RedirectResponse(url="/", status_code=302)
 
 
 @router.get("/onedrive/profile")

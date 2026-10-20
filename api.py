@@ -1463,9 +1463,55 @@ def stop_pid(pid: int):
         logger.warning("Failed to kill process %d: %s", pid, e)
 
 
+def is_outlook_connected(request: Request, user_email: Optional[str] = None) -> bool:
+    """Dynamically determine whether Outlook/Microsoft authentication is available:
+    1. Active session cookie on the current request
+    2. Any active valid OAuth session file in .sessions/ (server-side connected accounts)
+    3. Azure / Microsoft Application Credentials in environment (Client Credentials Flow)
+    """
+    # 1. Cookie-based session
+    try:
+        if bool(od_get_token(request)):
+            return True
+    except Exception:
+        pass
+
+    # 2. Server-side session files saved in .sessions
+    try:
+        workspace_dir = Path(__file__).resolve().parent.parent
+        possible_dirs = [
+            workspace_dir / ".sessions",
+            workspace_dir / "file-classification-" / ".sessions",
+            Path.cwd() / ".sessions",
+        ]
+        for sdir in possible_dirs:
+            if sdir.exists():
+                for s_file in sdir.glob("onedrive_*.json"):
+                    try:
+                        with open(s_file, "r", encoding="utf-8") as f:
+                            data = _json.load(f)
+                            if data.get("refresh_token") or data.get("access_token"):
+                                return True
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+
+    # 3. Client Credentials Flow available via environment
+    try:
+        client_id = os.getenv("MICROSOFT_CLIENT_ID") or os.getenv("AZURE_CLIENT_ID")
+        client_secret = os.getenv("MICROSOFT_CLIENT_SECRET") or os.getenv("AZURE_CLIENT_SECRET")
+        if client_id and client_secret:
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
 @app.get("/api/automation/status", tags=["🚀 Pipeline"])
 def get_automation_status(request: Request, user_email: Optional[str] = Query(None)):
-    outlook_conn = bool(od_get_token(request))
+    outlook_conn = is_outlook_connected(request, user_email)
     gmail_conn = bool(google_get_creds(request))
 
     running = False
@@ -1504,7 +1550,7 @@ class AutomationStartRequest(BaseModel):
 
 @app.post("/api/automation/start", tags=["🚀 Pipeline"])
 def start_automation(body: AutomationStartRequest, request: Request):
-    outlook_conn = bool(od_get_token(request))
+    outlook_conn = is_outlook_connected(request, body.user_email)
     gmail_conn = bool(google_get_creds(request))
 
     if body.provider == "outlook" and not outlook_conn:
