@@ -2,7 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, FileText, Tags,
   Workflow, FolderTree, Cloud, BarChart3, Activity, Terminal,
-  Settings2, SlidersHorizontal, Info, Shield, ChevronLeft, ChevronRight,
+  Settings2, SlidersHorizontal, Info, Shield, PanelLeft,
   RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
@@ -56,22 +56,28 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
         collapsed ? "w-[60px]" : "w-[230px]"
       )}
     >
-      <div className="h-14 flex items-center gap-2 px-3 border-b border-sidebar-border">
-        <div className="w-7 h-7 rounded-md bg-primary/10 text-primary grid place-items-center shrink-0">
-          <Shield className="w-4 h-4" />
-        </div>
+      <div className={cn("h-14 flex items-center gap-2 px-3 border-b border-sidebar-border", collapsed && "justify-center px-0")}>
         {!collapsed && (
-          <div className="min-w-0">
-            <div className="text-[13px] font-semibold leading-tight truncate">File Classifier</div>
-            <div className="text-[10px] tracking-widest text-muted-foreground">AGENT</div>
-          </div>
+          <>
+            <div className="w-7 h-7 rounded-md bg-primary/10 text-primary grid place-items-center shrink-0">
+              <Shield className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold leading-tight truncate">File Classifier</div>
+              <div className="text-[10px] tracking-widest text-muted-foreground">AGENT</div>
+            </div>
+          </>
         )}
         <button
           onClick={onToggle}
-          className="ml-auto p-1 rounded hover:bg-sidebar-accent text-muted-foreground"
+          className={cn(
+            "p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground transition-colors",
+            !collapsed && "ml-auto"
+          )}
           aria-label="Toggle sidebar"
+          title="Toggle sidebar"
         >
-          {collapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronLeft className="w-3.5 h-3.5" />}
+          <PanelLeft className="w-4 h-4" />
         </button>
       </div>
 

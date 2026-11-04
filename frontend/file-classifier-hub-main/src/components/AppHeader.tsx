@@ -1,4 +1,4 @@
-import { Bell, Moon, Sun, Search, ChevronDown, Settings2, Info, User, LogOut, PanelLeft } from "lucide-react";
+import { Bell, Moon, Sun, Search, ChevronDown, Settings2, Info, User, LogOut } from "lucide-react";
 import { useSettings, useApp } from "@/lib/store";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -8,21 +8,13 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-export function AppHeader({ onToggleSidebar }: { onToggleSidebar: () => void }) {
+export function AppHeader({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const { theme, setTheme } = useSettings();
   const navigate = useNavigate();
   const activity = useApp((s) => s.activity);
 
   return (
     <header className="h-14 shrink-0 border-b border-border bg-card/60 backdrop-blur-sm flex items-center gap-3 px-4">
-      <button
-        onClick={onToggleSidebar}
-        className="p-1.5 rounded hover:bg-accent text-muted-foreground"
-        aria-label="Toggle sidebar"
-      >
-        <PanelLeft className="w-4 h-4" />
-      </button>
-
       <div className="flex items-center gap-2">
         <span className="text-[13px] font-semibold">File Classifier Agent</span>
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium tracking-wider">
