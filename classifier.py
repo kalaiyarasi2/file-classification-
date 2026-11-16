@@ -191,7 +191,7 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
 
             response = client.chat.completions.create(
                 model=self.llm_model,
-                max_tokens=512,
+                max_completion_tokens=512,
                 response_format={"type": "json_object"},
                 messages=[
                     {

@@ -148,7 +148,7 @@ def main() -> int:
     # ── Read settings from .env ───────────────────────────────────────────────
     pdf_max_pages = int(get_env_setting("PDF_MAX_PAGES",        default="3"))
     min_score     = float(get_env_setting("MIN_SCORE_THRESHOLD", default="3"))
-    llm_model     = get_env_setting("LLM_MODEL",                 default="gpt-4o")
+    llm_model     = get_env_setting("LLM_MODEL",                 default="gpt-5.6-terra")
     poppler_path  = get_env_setting("POPPLER_PATH",              default="") or None
 
     # ── Resolve folders ───────────────────────────────────────────────────────

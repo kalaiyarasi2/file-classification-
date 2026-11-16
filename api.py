@@ -263,7 +263,7 @@ class HealthResponse(BaseModel):
     status: str = Field(..., example="ok")
     version: str = Field(..., example="1.0.0")
     categories_loaded: int = Field(..., example=5)
-    llm_model: str = Field(..., example="gpt-4o")
+    llm_model: str = Field(..., example="gpt-5.6-terra")
     openai_key_configured: bool = Field(..., example=True)
 
 
@@ -274,7 +274,7 @@ class CategoryInfo(BaseModel):
 
 
 class ConfigResponse(BaseModel):
-    llm_model: str = Field(..., example="gpt-4o")
+    llm_model: str = Field(..., example="gpt-5.6-terra")
     min_score_threshold: float = Field(..., example=7.0)
     pdf_max_pages: int = Field(..., example=3)
     poppler_path: Optional[str] = Field(None, example="C:\\poppler\\bin")
@@ -308,7 +308,7 @@ class ClassifyTextRequest(BaseModel):
     )
     llm_model: Optional[str] = Field(
         None,
-        example="gpt-4o",
+        example="gpt-5.6-terra",
         description="Override the default LLM model from `.env`.",
     )
     threshold: Optional[float] = Field(
@@ -383,7 +383,7 @@ class PipelineRequest(BaseModel):
     )
     pdf_max_pages: int = Field(3, ge=1, le=20, description="Pages to read per PDF.")
     min_score: float = Field(7.0, ge=0, le=10, description="Min LLM score to accept a category.")
-    llm_model: str = Field("gpt-4o", description="OpenAI model to use for classification.")
+    llm_model: str = Field("gpt-5.6-terra", description="OpenAI model to use for classification.")
     copy_mode: bool = Field(False, description="Copy files instead of moving them.")
     dry_run: bool = Field(False, description="Classify without moving files.")
 
@@ -454,7 +454,7 @@ def _get_classifier(
     categories = _get_categories()
     if active_categories is not None:
         categories = {k: v for k, v in categories.items() if k in active_categories}
-    model = llm_model or get_env_setting("LLM_MODEL", "gpt-4o")
+    model = llm_model or get_env_setting("LLM_MODEL", "gpt-5.6-terra")
     thresh = threshold if threshold is not None else float(get_env_setting("MIN_SCORE_THRESHOLD", "5"))
     return DocumentClassifier(categories=categories, threshold=thresh, llm_model=model, llm_enabled=True)
 
@@ -491,7 +491,7 @@ def health_check() -> HealthResponse:
         status="ok",
         version="1.0.0",
         categories_loaded=len(categories),
-        llm_model=get_env_setting("LLM_MODEL", "gpt-4o"),
+        llm_model=get_env_setting("LLM_MODEL", "gpt-5.6-terra"),
         openai_key_configured=bool(api_key),
     )
 
@@ -525,7 +525,7 @@ def get_config() -> ConfigResponse:
         for name, kws in categories.items()
     ]
     return ConfigResponse(
-        llm_model=get_env_setting("LLM_MODEL", "gpt-4o"),
+        llm_model=get_env_setting("LLM_MODEL", "gpt-5.6-terra"),
         min_score_threshold=float(get_env_setting("MIN_SCORE_THRESHOLD", "3")),
         pdf_max_pages=int(get_env_setting("PDF_MAX_PAGES", "3")),
         poppler_path=get_env_setting("POPPLER_PATH") or None,

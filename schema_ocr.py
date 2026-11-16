@@ -146,7 +146,7 @@ class SchemaOCRExtractor:
         
         try:
             response = client.chat.completions.create(
-                model="gpt-4o-mini",  # Text model, no vision needed
+                model="gpt-5.4-nano",  # Text model, no vision needed
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0.0
@@ -161,7 +161,7 @@ class SchemaOCRExtractor:
                 from core.universal_token_monitor import track_usage
                 
                 if hasattr(response, 'usage') and response.usage:
-                    track_usage("FILE_CLASSIFICATION", "gpt-4o-mini", response.usage.prompt_tokens, response.usage.completion_tokens, "schema_ocr")
+                    track_usage("FILE_CLASSIFICATION", "gpt-5.4-nano", response.usage.prompt_tokens, response.usage.completion_tokens, "schema_ocr")
             except Exception as e:
                 print(f"[Warning] Failed to track tokens: {e}")
                 

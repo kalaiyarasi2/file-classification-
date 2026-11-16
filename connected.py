@@ -147,7 +147,7 @@ def run_pipeline(
     email_filter: str = "all",
     pdf_max_pages: int = 3,
     min_score: float = 7.0,
-    llm_model: str = "gpt-4o",
+    llm_model: str = "gpt-5.6-terra",
     copy_mode: bool = True,
 ) -> Dict[str, Any]:
     """
@@ -255,7 +255,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--model",
-        default="gpt-4o",
+        default="gpt-5.6-terra",
         help="LLM model to use for classification",
     )
     parser.add_argument(

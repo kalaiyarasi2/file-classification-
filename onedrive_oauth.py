@@ -464,7 +464,7 @@ class OneDriveDriveClassifyRequest(BaseModel):
     dry_run: bool = Field(False, description="Classify files without uploading sorted outputs back to OneDrive")
     pdf_max_pages: int = Field(3, ge=1, le=20)
     min_score: float = Field(7.0, ge=0.0, le=10.0)
-    llm_model: Optional[str] = Field("gpt-4o")
+    llm_model: Optional[str] = Field("gpt-5.6-terra")
     categories: Optional[List[str]] = Field(None, description="Active categories to classify against. None = use all configured categories")
     max_files: Optional[int] = Field(None, description="Limit on number of files to process")
     poc_engine: Optional[str] = Field(None, description="The selected POC engine (e.g. AUTO, INSURANCE, etc.)")
@@ -575,7 +575,7 @@ async def cloud_onedrive_classify(request: Request, body: OneDriveDriveClassifyR
         # 5. Run the Local Classifier Pipeline
         model = body.llm_model
         if not model or model.strip().lower() in ("string", "", "null", "none"):
-            model = "gpt-4o"
+            model = "gpt-5.6-terra"
 
         logger.info("Running local classification pipeline on %d downloaded files", downloaded_count)
         pipeline_results = run_pipeline_full(

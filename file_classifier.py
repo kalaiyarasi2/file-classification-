@@ -18,7 +18,7 @@ This file consolidates the following modules into one importable, standalone Pyt
     )
 
     categories = load_categories_from_env()
-    classifier = DocumentClassifier(categories=categories, llm_model="gpt-4o")
+    classifier = DocumentClassifier(categories=categories, llm_model="gpt-5.6-terra")
     category, score = classifier.classify(some_text)
 
 Pipeline (per file):
@@ -1068,7 +1068,7 @@ class SchemaOCRExtractor:
 
         try:
             response = client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5.4-nano",
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0.0,
@@ -1080,7 +1080,7 @@ class SchemaOCRExtractor:
                 _cp = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '..')
                 if _cp not in _sys.path: _sys.path.insert(0, _cp)
                 from core.universal_token_monitor import track_usage as _tm
-                _tm(response.usage, model="gpt-4o-mini", poc_name="file-classification",
+                _tm(response.usage, model="gpt-5.4-nano", poc_name="file-classification",
                     file_name=getattr(self, '_current_file', 'unknown'), step_name="schema_ocr_mapping")
             except Exception: pass
             _logger.info("[Rostaing OCR] Schema mapping completed successfully.")
@@ -1812,7 +1812,7 @@ class DocumentClassifier:
         categories:  Mapping of ``{category_name: [keyword, ...]}``.
         threshold:   Minimum LLM score (0-10) to accept a category win.
                      If the winner's score is below this, returns "Others".
-        llm_model:   LLM model identifier string (e.g. "gpt-4o").
+        llm_model:   LLM model identifier string (e.g. "gpt-5.6-terra").
         llm_enabled: Whether to use the LLM scorer. When False, uses only
                      the legacy fuzzy keyword fallback.
     """
@@ -1823,7 +1823,7 @@ class DocumentClassifier:
         self,
         categories: dict[str, list[str]],
         threshold: float | None = None,
-        llm_model: str = "gpt-4o",
+        llm_model: str = "gpt-5.6-terra",
         llm_enabled: bool = True,
     ) -> None:
         self.categories = categories
@@ -1939,7 +1939,7 @@ IMPORTANT: Respond ONLY with valid JSON in this exact format:
 
             response = client.chat.completions.create(
                 model=self.llm_model,
-                max_tokens=512,
+                max_completion_tokens=512,
                 response_format={"type": "json_object"},
                 messages=[
                     {
@@ -2356,7 +2356,7 @@ def run_pipeline_full(
     categories: dict[str, list[str]],
     pdf_max_pages: int = 3,
     min_score: float = 3.0,
-    llm_model: str = "gpt-4o",
+    llm_model: str = "gpt-5.6-terra",
     copy_mode: bool = False,
     dry_run: bool = False,
     poppler_path: str | None = None,
@@ -2372,7 +2372,7 @@ def run_pipeline_full(
         categories:    Mapping of ``{category_name: [keyword, ...]}``.
         pdf_max_pages: Number of pages to read per PDF for classification.
         min_score:     Minimum LLM score (0-10) to accept a category win.
-        llm_model:     OpenAI model identifier (e.g. "gpt-4o").
+        llm_model:     OpenAI model identifier (e.g. "gpt-5.6-terra").
         copy_mode:     Copy files instead of moving when True.
         dry_run:       Log only - do not move/copy files or write report.
         poppler_path:  Path to Poppler bin folder (Windows). None = use PATH.
@@ -2550,7 +2550,7 @@ def main() -> int:
     # ── Read settings from .env ───────────────────────────────────────────────
     pdf_max_pages = int(get_env_setting("PDF_MAX_PAGES",        default="3"))
     min_score     = float(get_env_setting("MIN_SCORE_THRESHOLD", default="3"))
-    llm_model     = get_env_setting("LLM_MODEL",                 default="gpt-4o")
+    llm_model     = get_env_setting("LLM_MODEL",                 default="gpt-5.6-terra")
     poppler_path  = get_env_setting("POPPLER_PATH",              default="") or None
 
     # ── Resolve folders ───────────────────────────────────────────────────────

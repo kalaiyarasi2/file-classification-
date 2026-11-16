@@ -118,7 +118,7 @@ class OneDriveClassifierConnector:
         self.dry_run        = dry_run
 
         # Sanitize llm_model
-        _default_model = _read_env_key("LLM_MODEL", "gpt-4o")
+        _default_model = _read_env_key("LLM_MODEL", "gpt-5.6-terra")
         _requested_model = llm_model or _default_model
         if not _requested_model or _requested_model.strip().lower() in ("string", "", "null", "none"):
             _requested_model = _default_model
@@ -332,7 +332,7 @@ Examples:
     parser.add_argument("--score",  type=float, default=7.0, metavar="SCORE",
                         help="Minimum LLM score to accept a category (default: 7.0).")
     parser.add_argument("--model",  default=None, metavar="MODEL",
-                        help="OpenAI model (default: from .env or gpt-4o).")
+                        help="OpenAI model (default: from .env or gpt-5.6-terra).")
     parser.add_argument("--validate-only", action="store_true",
                         help="Check OneDrive access and PDF count, then exit.")
     args = parser.parse_args()

@@ -40,7 +40,7 @@ function ConfigPage() {
   });
 
   const filtered = useMemo(() => {
-    if (!data) return [];
+    if (!data?.categories) return [];
     const q = search.toLowerCase();
     if (!q) return data.categories;
     return data.categories.filter(
@@ -48,7 +48,7 @@ function ConfigPage() {
     );
   }, [data, search]);
 
-  const totalKeywords = data?.categories.reduce((s, c) => s + c.keyword_count, 0) ?? 0;
+  const totalKeywords = data?.categories?.reduce((s, c) => s + (c.keyword_count || 0), 0) ?? 0;
 
   return (
     <>
@@ -91,7 +91,7 @@ function ConfigPage() {
         <StatCard label="LLM Model" value={data?.llm_model || "—"} icon={Cpu} />
         <StatCard label="Threshold" value={data?.min_score_threshold ?? "—"} icon={Gauge} />
         <StatCard label="Max Pages" value={data?.pdf_max_pages ?? "—"} icon={FileText} />
-        <StatCard label="Categories" value={data?.categories.length ?? 0} icon={Layers} hint={`${totalKeywords} keywords total`} />
+        <StatCard label="Categories" value={data?.categories?.length ?? 0} icon={Layers} hint={`${totalKeywords} keywords total`} />
       </div>
 
       <Panel

@@ -88,7 +88,7 @@ function ClassificationPage() {
           </div>
           <div>
             <Label className="text-[11.5px]">LLM Model (optional)</Label>
-            <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="gpt-4o" className="h-8 mt-1" />
+            <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="gpt-5.6-terra" className="h-8 mt-1" />
           </div>
           <div>
             <Label className="text-[11.5px]">Threshold (0–10)</Label>
